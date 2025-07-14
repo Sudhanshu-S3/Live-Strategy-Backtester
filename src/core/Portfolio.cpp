@@ -60,7 +60,7 @@ void Portfolio::updateTimeIndex() {
         // If there's no bar, we carry forward the last known market value
         // (This might happen if one asset's data feed pauses)
         else {
-             total_market_value += position.market_value;
+            total_market_value += position.market_value;
         }
     }
 
@@ -71,4 +71,16 @@ void Portfolio::updateTimeIndex() {
 
 const std::vector<double>& Portfolio::getEquityCurve() const {
     return equity_curve;
+}
+
+std::string Portfolio::getPositionDirection(const std::string& symbol) const {
+    auto it = holdings.find(symbol);
+    if (it != holdings.end() && it->second.quantity > 0) {
+        // This is a simplified check. A real system would differentiate long/short.
+        // For now, we assume any holding is a LONG holding. To support shorting,
+        // the Position struct would need a 'direction' member.
+        // Let's return "SELL" to close the position.
+        return "SELL";
+    }
+    return "NONE"; // No position held.
 }

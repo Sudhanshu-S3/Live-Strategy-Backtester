@@ -27,6 +27,7 @@ public:
     // Updates the market value of all holdings and records the new total equity.
     // This should be called once per heartbeat of the backtest.
     void updateTimeIndex();
+    std::string getPositionDirection(const std::string& symbol) const;
 
     // Getter for the equity curve
     const std::vector<double>& getEquityCurve() const;

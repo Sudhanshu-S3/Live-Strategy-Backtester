@@ -4,29 +4,33 @@
 #include "DataHandler.h"
 #include "Strategy.h"
 #include "ExecutionHandler.h"
-#include "Portfolio.h" 
+#include "Portfolio.h"
 #include <memory>
+#include <queue>
 
-using namespace std;
+class Event;
 
 class Backtester {
 public:
-    
     Backtester(
-        unique_ptr<DataHandler> data_handler, 
-        unique_ptr<Strategy> strategy,
-        unique_ptr<ExecutionHandler> execution_handler,
-        Portfolio* portfolio 
+        std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+        std::shared_ptr<DataHandler> data_handler,
+        std::shared_ptr<Strategy> strategy,
+        std::shared_ptr<Portfolio> portfolio,
+        std::shared_ptr<ExecutionHandler> execution_handler
     );
-
     
     void run();
 
 private:
-    unique_ptr<DataHandler> data_handler;
-    unique_ptr<Strategy> strategy;
-    unique_ptr<ExecutionHandler> execution_handler;
-    Portfolio* portfolio; 
+    void handleEvent(const std::shared_ptr<Event>& event);
+
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue;
+    std::shared_ptr<DataHandler> data_handler;
+    std::shared_ptr<Strategy> strategy;
+    std::shared_ptr<Portfolio> portfolio;
+    std::shared_ptr<ExecutionHandler> execution_handler;
+    bool continue_backtest;
 };
 
 #endif

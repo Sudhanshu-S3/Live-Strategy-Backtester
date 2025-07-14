@@ -1,25 +1,30 @@
-#include "SimulatedExecutionHandler.h"
-using namespace std;
+#include "../../include/execution/SimulatedExecutionHandler.h"
 
-SimulatedExecutionHandler::SimulatedExecutionHandler(double commission_rate)
-    : commission_rate(commission_rate) {}
+// --- IMPLEMENT THE NEW CONSTRUCTOR ---
+SimulatedExecutionHandler::SimulatedExecutionHandler(
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+    std::shared_ptr<DataHandler> data_handler
+) : event_queue(event_queue), data_handler(data_handler) {}
 
-// Simulates the execution of an order.
-FillEvent SimulatedExecutionHandler::executeOrder(const OrderEvent& order, const Bar& bar) {
+
+// --- IMPLEMENT THE NEW EVENT-DRIVEN LOGIC ---
+void SimulatedExecutionHandler::executeOrder(const OrderEvent& order, const Bar& bar) {
+    // Assume fill at the closing price of the provided bar (a simplification).
     double fill_price = bar.close;
 
-    
-    double commission = fill_price * order.quantity * this->commission_rate;
+    // Simulate a simple commission scheme.
+    double commission = 1.99; // Example: $1.99 flat commission per trade
 
-
-    FillEvent fill_event = {
-        bar.timestamp,     
+    // Create the FillEvent with the execution details.
+    auto fill_event = std::make_shared<FillEvent>(
         order.symbol,
+        order.timestamp,
         order.direction,
         order.quantity,
         fill_price,
         commission
-    };
+    );
 
-    return fill_event;
-}
+    // Push the FillEvent onto the main event queue for the portfolio to process.
+    event_queue->push(fill_event);
+};

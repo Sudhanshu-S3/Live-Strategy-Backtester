@@ -21,7 +21,7 @@ include_directories(
 add_executable(backtester 
     src/main.cpp
     src/data/HistoricCSVDataHandler.cpp
-    src/strategy/SimpleMovingAverageCrossover.cpp
+    src/strategy/PairTradingStrategy.cpp
     src/core/Backtester.cpp
     src/execution/SimulatedExecutionHandler.cpp
     src/core/Portfolio.cpp

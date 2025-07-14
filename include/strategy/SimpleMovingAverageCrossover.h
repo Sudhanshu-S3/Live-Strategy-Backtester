@@ -2,26 +2,36 @@
 #define SIMPLE_MOVING_AVERAGE_CROSSOVER_H
 
 #include "Strategy.h"
-#include <vector>
+#include "../data/DataHandler.h"
 #include <string>
-using namespace std;
+#include <vector>
+#include <memory>
 
 class SimpleMovingAverageCrossover : public Strategy {
 public:
-    // Constructor takes the symbol and the short/long window periods.
-    SimpleMovingAverageCrossover(string symbol, int short_window, int long_window);
+    SimpleMovingAverageCrossover(
+        std::string symbol, 
+        int short_window, 
+        int long_window,
+        std::shared_ptr<DataHandler> data_handler
+    );
 
-    // Override the virtual function from the base class.
-    SignalEvent generateSignals(const Bar& bar) override;
+    void generateSignals(
+        const MarketEvent& event, 
+        std::queue<std::shared_ptr<Event>>& event_queue
+    ) override;
 
 private:
-    string symbol;
+    double calculate_sma(int period);
+
+    std::string symbol;
     int short_window;
     int long_window;
-    vector<double> prices; 
+    std::shared_ptr<DataHandler> data_handler;
 
-    // Simple Moving Average 
-    double calculate_sma(int period);
+    std::vector<double> prices;
+    enum class PositionState { NONE, LONG, SHORT };
+    PositionState current_position = PositionState::NONE;
 };
 
-#endif
+#endif // SIMPLE_MOVING_AVERAGE_CROSSOVER_H

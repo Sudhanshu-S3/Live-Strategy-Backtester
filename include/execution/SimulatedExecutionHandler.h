@@ -1,21 +1,26 @@
 #ifndef SIMULATED_EXECUTION_HANDLER_H
 #define SIMULATED_EXECUTION_HANDLER_H
 
-
 #include "ExecutionHandler.h"
-
-// A simple execution handler that simulates trades.
+#include "../data/DataHandler.h" // Include DataHandler
+#include <queue>
+#include <memory>
 
 class SimulatedExecutionHandler : public ExecutionHandler {
 public:
-    // Constructor can take configuration like commission rate.
-    SimulatedExecutionHandler(double commission_rate = 0.001);
+    // --- CONSTRUCTOR UPDATED ---
+    // Now takes both the event queue and the data handler.
+    SimulatedExecutionHandler(
+        std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+        std::shared_ptr<DataHandler> data_handler
+    );
 
-    // Override the virtual function from the base class.
-    FillEvent executeOrder(const OrderEvent& order, const Bar& bar) override;
+    // The method signature is simple: it receives an order and processes it.
+    void executeOrder(const OrderEvent& order, const Bar& bar) override;
 
 private:
-    double commission_rate;
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue;
+    std::shared_ptr<DataHandler> data_handler;
 };
 
-#endif
+#endif // SIMULATED_EXECUTION_HANDLER_H

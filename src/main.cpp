@@ -3,102 +3,93 @@
 #include <iomanip>
 #include <fstream>
 #include <stdexcept>
+#include <queue>
+#include <map>
+#include <string>
 
-// Include the JSON library
-#include "nlohmann/json.hpp"
-using namespace std;
+#include "../lib/nlohmann/json.hpp"
 
-// Include all our project components
-#include "HistoricCSVDataHandler.h"
-#include "SimpleMovingAverageCrossover.h"
-#include "SimulatedExecutionHandler.h"
-#include "Portfolio.h"
-#include "Performance.h"
-#include "Backtester.h"
+// Standardized include paths
+#include "../include/data/DataHandler.h"
+#include "../include/data/HistoricCSVDataHandler.h"
+#include "../include/strategy/Strategy.h"
+#include "../include/strategy/PairTradingStrategy.h"
+#include "../include/execution/ExecutionHandler.h"
+#include "../include/execution/SimulatedExecutionHandler.h"
+#include "../include/core/Portfolio.h"
+#include "../include/core/Performance.h"
+#include "../include/core/Backtester.h"
 
-// Use the nlohmann::json namespace
 using json = nlohmann::json;
 
 int main() {
-    cout << "Starting Configuration-Driven Backtest..." << endl;
+    std::cout << "Starting Event-Driven Multi-Asset Backtest..." << std::endl;
 
-    // Load Configuration from JSON file
     json config;
     try {
-        ifstream config_file("config.json");
-        if (!config_file.is_open()) {
-            throw runtime_error("Could not open config.json");
-        }
+        std::ifstream config_file("config.json");
+        if (!config_file.is_open()) throw std::runtime_error("Could not open config.json");
         config = json::parse(config_file);
-    } catch (const exception& e) {
-        cerr << "Configuration Error: " << e.what() << endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Configuration Error: " << e.what() << std::endl;
         return 1;
     }
-
-    // Instantiate Components Based on Configuration
-    double initial_capital = config["initial_capital"];
-    
-    // We need a raw pointer to the portfolio to access its state after the run.
-    Portfolio* portfolio_ptr = nullptr;
 
     try {
-        // Create components using values from the config file
-        auto data_handler = make_unique<HistoricCSVDataHandler>(
-            config["data"]["csv_filepath"], 
-            config["data"]["symbol"]
+        auto event_queue = std::make_shared<std::queue<std::shared_ptr<Event>>>();
+
+        auto data_handler = std::make_shared<HistoricCSVDataHandler>(
+            config["data"]["symbol_filepaths"].get<std::map<std::string, std::string>>()
         );
 
-        auto strategy = make_unique<SimpleMovingAverageCrossover>(
-            config["data"]["symbol"],
-            config["strategy"]["short_window"],
-            config["strategy"]["long_window"]
+        auto portfolio = std::make_shared<Portfolio>(config["initial_capital"], data_handler);
+        auto execution_handler = std::make_shared<SimulatedExecutionHandler>(event_queue, data_handler);
+
+        std::shared_ptr<Strategy> strategy;
+        std::string strategy_name = config["strategy"]["name"];
+        std::cout << "Using strategy: " << strategy_name << std::endl;
+
+        if (strategy_name == "PAIR_TRADING") {
+            auto params = config["strategy"]["params"];
+            strategy = std::make_shared<PairTradingStrategy>(
+                params["symbol_a"], params["symbol_b"], params["window"],
+                params["z_score_threshold"], data_handler
+            );
+        } else {
+            throw std::runtime_error("Strategy not recognized: " + strategy_name);
+        }
+
+        auto backtester = std::make_unique<Backtester>(
+            event_queue, data_handler, strategy, portfolio, execution_handler
         );
-
-        auto execution_handler = make_unique<SimulatedExecutionHandler>(
-            config["execution"]["commission_rate"]
-        );
-
-        auto portfolio = make_unique<Portfolio>(initial_capital);
-        portfolio_ptr = portfolio.get();
-
-        // Inject Dependencies into the Backtester
-        // The Backtester is constructed with the abstract base classes,
-        // completely unaware of the concrete implementations.
-        auto backtester = make_unique<Backtester>(
-            move(data_handler), 
-            move(strategy), 
-            move(execution_handler),
-            portfolio_ptr
-        );
-
-        // Run the backtest 
+        
         backtester->run();
 
-    } catch (const exception& e) {
-        cerr << "Runtime Error: " << e.what() << endl;
+        std::cout << "\n<><><><><><><> PERFORMANCE REPORT <><><><><><><>\n" << std::endl;
+        
+        double initial_capital = config["initial_capital"];
+        const auto& equity_curve = portfolio->getEquityCurve();
+        
+        if (equity_curve.empty()) {
+            std::cout << "No trading activity. Performance metrics are not applicable." << std::endl;
+        } else {
+            double final_value = equity_curve.back();
+            Performance perf(equity_curve, initial_capital);
+            std::cout << std::fixed << std::setprecision(2);
+            std::cout << "--- OVERVIEW ---\n"
+                      << "Initial Capital:       $" << initial_capital << "\n"
+                      << "Final Portfolio Value: $" << final_value << "\n\n"
+                      << "--- KEY METRICS ---\n"
+                      << "Total Return:          " << perf.getTotalReturn() * 100.0 << "%\n"
+                      << "Max Drawdown:          " << perf.getMaxDrawdown() * 100.0 << "%\n"
+                      << "Annualized Sharpe Ratio: " << perf.getSharpeRatio() << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "Runtime Error: " << e.what() << std::endl;
         return 1;
     }
 
-    // Generate and Display Final Performance Report
-    cout << "\n<><><><><><><><><><><><><><><><><><><><><><><><><>" << endl;
-    cout << "           STRATEGY PERFORMANCE REPORT" << endl;
-    cout << "<><><><><><><><><><><><><><><><><><><><><><><><><>" << endl;
-
-    if (portfolio_ptr) {
-        Performance perf(portfolio_ptr->getEquityCurve(), initial_capital);
-        cout << fixed << setprecision(2);
-
-        cout << "\n--- OVERVIEW ---" << endl;
-        cout << "Initial Capital:       $" << initial_capital << endl;
-        cout << "Final Portfolio Value: $" << portfolio_ptr->getTotalValue() << endl;
-
-        cout << "\n--- KEY METRICS ---" << endl;
-        cout << "Total Return:          " << perf.getTotalReturn() * 100.0 << "%" << endl;
-        cout << "Max Drawdown:          " << perf.getMaxDrawdown() * 100.0 << "%" << endl;
-        cout << "Annualized Sharpe Ratio: " << perf.getSharpeRatio() << endl;
-    }
-    
-    cout << "\nBacktest complete!" << endl;
-
+    std::cout << "\nBacktest complete!" << std::endl;
     return 0;
 }

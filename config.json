@@ -1,17 +1,22 @@
 {
   "initial_capital": 100000.0,
+  "execution": {
+    "commission_rate": 0.001
+  },
   "data": {
-    "handler": "historic_csv",
-    "symbol": "BTCUSDT",
-    "csv_filepath": "data/BTCUSDT-1h-2025-07-13.csv"
+    "symbols": ["ETH/USDT", "BTC/USDT"],
+    "symbol_filepaths": {
+      "ETH/USDT": "data/ETHUSDT-1s-2025-07-13.csv",
+      "BTC/USDT": "data/BTCUSDT-1s-2025-07-13.csv"
+    }
   },
   "strategy": {
-    "name": "sma_crossover",
-    "short_window": 10,
-    "long_window": 25
-  },
-  "execution": {
-    "handler": "simulated",
-    "commission_rate": 0.001
+    "name": "PAIR_TRADING",
+    "params": {
+      "symbol_a": "ETH/USDT",
+      "symbol_b": "BTC/USDT",
+      "window": 30,
+      "z_score_threshold": 2.0
+    }
   }
 }

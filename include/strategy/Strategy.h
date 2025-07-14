@@ -1,16 +1,22 @@
 #ifndef STRATEGY_H
 #define STRATEGY_H
 
-#include "DataTypes.h"
-#include <optional>
+#include <queue>
+#include <memory>
+#include "../data/DataTypes.h"
 
-// Abstract base class for all trading strategies.
+// The Strategy class is responsible for generating trading signals
+// based on incoming market data.
 class Strategy {
 public:
     virtual ~Strategy() = default;
 
-    // It takes the latest bar and returns a SignalEvent.
-    virtual SignalEvent generateSignals(const Bar& bar) = 0;
+    // Reacts to a market event and may push SignalEvents to the queue.
+    // This is now the core method for all strategies.
+    virtual void generateSignals(
+        const MarketEvent& event, 
+        std::queue<std::shared_ptr<Event>>& event_queue
+    ) = 0;
 };
 
-#endif
+#endif // STRATEGY_H

@@ -1,4 +1,3 @@
-
 #ifndef EXECUTION_HANDLER_H
 #define EXECUTION_HANDLER_H
 
@@ -13,7 +12,7 @@ public:
     virtual ~ExecutionHandler() = default;
 
     
-    virtual FillEvent executeOrder(const OrderEvent& order, const Bar& bar) = 0;
+    virtual void executeOrder(const OrderEvent& order, const Bar& bar) = 0;
 };
 
-#endif 
+#endif
