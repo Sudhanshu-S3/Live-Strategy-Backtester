@@ -41,13 +41,7 @@ void HistoricCSVDataHandler::parse_all_csvs(const map<string, string>& csv_filep
             bar.symbol = symbol;
 
             // 1. Timestamp
-            string timestamp_str;
-            getline(ss, timestamp_str, ',');
-            tm tm = {};
-            // The format "%Y-%m-%d %H:%M:%S" must match your CSV data exactly
-            stringstream ts_ss(timestamp_str);
-            ts_ss >> get_time(&tm, "%Y-%m-%d %H:%M:%S");
-            bar.timestamp = chrono::system_clock::from_time_t(mktime(&tm));
+            getline(ss, bar.timestamp, ',');
 
             // 2. Open, High, Low, Close, Volume
             getline(ss, item, ','); bar.open = stod(item);
@@ -92,7 +86,7 @@ void HistoricCSVDataHandler::updateBars(queue<shared_ptr<Event>>& event_queue) {
 
     // Determine which symbol has the next bar in chronological order
     string next_symbol_to_process = "";
-    auto earliest_time = chrono::system_clock::time_point::max();
+    string earliest_time = "9999-99-99"; // Use string comparison
 
     for (const auto& pair : current_bar_iterators) {
         const auto& symbol = pair.first;
@@ -112,9 +106,7 @@ void HistoricCSVDataHandler::updateBars(queue<shared_ptr<Event>>& event_queue) {
     if (!next_symbol_to_process.empty()) {
         // Create and push the event
         const auto& bar_to_process = *current_bar_iterators.at(next_symbol_to_process);
-        auto market_event = make_shared<MarketEvent>();
-        market_event->symbol = bar_to_process.symbol;
-        market_event->timestamp = bar_to_process.timestamp;
+        auto market_event = make_shared<MarketEvent>(bar_to_process.symbol, bar_to_process.timestamp);
         event_queue.push(market_event);
 
         // Update the latest bar for this symbol for easy access

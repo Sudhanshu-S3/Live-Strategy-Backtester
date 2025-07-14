@@ -1,22 +1,12 @@
 {
   "initial_capital": 100000.0,
-  "execution": {
-    "commission_rate": 0.001
-  },
+  "symbols": ["BTCUSDT"],
   "data": {
-    "symbols": ["ETH/USDT", "BTC/USDT"],
-    "symbol_filepaths": {
-      "ETH/USDT": "data/ETHUSDT-1s-2025-07-13.csv",
-      "BTC/USDT": "data/BTCUSDT-1s-2025-07-13.csv"
-    }
+    "trade_data_dir": "historical_data",
+    "book_data_dir": "historical_data"
   },
   "strategy": {
-    "name": "PAIR_TRADING",
-    "params": {
-      "symbol_a": "ETH/USDT",
-      "symbol_b": "BTC/USDT",
-      "window": 30,
-      "z_score_threshold": 2.0
-    }
+    "name": "MICROSTRUCTURE_TEST",
+    "params": {}
   }
 }

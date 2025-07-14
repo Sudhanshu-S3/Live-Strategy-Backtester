@@ -17,10 +17,11 @@ void SimulatedExecutionHandler::executeOrder(const OrderEvent& order, const Bar&
 
     // Create the FillEvent with the execution details.
     auto fill_event = std::make_shared<FillEvent>(
+        bar.timestamp,
         order.symbol,
-        order.timestamp,
-        order.direction,
+        "SIMULATED", // Placeholder for the exchange
         order.quantity,
+        order.direction,
         fill_price,
         commission
     );

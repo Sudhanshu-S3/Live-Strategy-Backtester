@@ -18,9 +18,10 @@ include_directories(
 )
 
 # Add all our .cpp files to the executable target
-add_executable(backtester 
+add_executable(backtester
     src/main.cpp
     src/data/HistoricCSVDataHandler.cpp
+    src/data/HFTDataHandler.cpp
     src/strategy/PairTradingStrategy.cpp
     src/core/Backtester.cpp
     src/execution/SimulatedExecutionHandler.cpp

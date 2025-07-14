@@ -9,21 +9,18 @@ Portfolio::Portfolio(double initial_capital, std::shared_ptr<DataHandler> data_h
 
 void Portfolio::onFill(const FillEvent& fill) {
     if (fill.direction == "BUY") {
-        double cost = fill.fill_price * fill.quantity;
-        current_cash -= cost;
-        current_cash -= fill.commission;
-
-        auto it = holdings.find(fill.symbol);
-        if (it != holdings.end()) {
-            // Position exists, update it
-            Position& position = it->second;
-            double old_cost = position.average_cost * position.quantity;
-            position.quantity += fill.quantity;
-            position.average_cost = (old_cost + cost) / position.quantity;
+        if (holdings.find(fill.symbol) == holdings.end()) {
+            // New position
+            holdings[fill.symbol] = Position{fill.symbol, static_cast<double>(fill.quantity), fill.fill_price};
         } else {
-            // Position is new, create it
-            holdings[fill.symbol] = Position{fill.symbol, fill.quantity, fill.fill_price};
+            // Increase existing position
+            Position& pos = holdings[fill.symbol];
+            double old_cost = pos.average_cost * pos.quantity;
+            pos.quantity += fill.quantity;
+            pos.average_cost = (old_cost + fill.fill_price * fill.quantity) / pos.quantity;
         }
+        current_cash -= fill.fill_price * fill.quantity;
+        current_cash -= fill.commission;
     } else if (fill.direction == "SELL") {
         double proceeds = fill.fill_price * fill.quantity;
         current_cash += proceeds;
