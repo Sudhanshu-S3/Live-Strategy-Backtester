@@ -1,6 +1,14 @@
 #include <iostream>
 #include <memory>
 #include <iomanip>
+#include <fstream>
+#include <stdexcept>
+
+// Include the JSON library
+#include "nlohmann/json.hpp"
+using namespace std;
+
+// Include all our project components
 #include "HistoricCSVDataHandler.h"
 #include "SimpleMovingAverageCrossover.h"
 #include "SimulatedExecutionHandler.h"
@@ -8,54 +16,77 @@
 #include "Performance.h"
 #include "Backtester.h"
 
-using namespace std;
+// Use the nlohmann::json namespace
+using json = nlohmann::json;
 
 int main() {
-    cout << "Starting Full Backtest with Performance Analysis..." << endl;
+    cout << "Starting Configuration-Driven Backtest..." << endl;
 
-    const string csv_filepath = "../data/BTCUSDT-1h-2025-07-13.csv";
-    const string symbol = "BTCUSDT";
-    const int short_window = 10;
-    const int long_window = 25;
-    const double initial_capital = 100000.0;
+    // Load Configuration from JSON file
+    json config;
+    try {
+        ifstream config_file("config.json");
+        if (!config_file.is_open()) {
+            throw runtime_error("Could not open config.json");
+        }
+        config = json::parse(config_file);
+    } catch (const exception& e) {
+        cerr << "Configuration Error: " << e.what() << endl;
+        return 1;
+    }
 
+    // Instantiate Components Based on Configuration
+    double initial_capital = config["initial_capital"];
+    
+    // We need a raw pointer to the portfolio to access its state after the run.
     Portfolio* portfolio_ptr = nullptr;
 
     try {
+        // Create components using values from the config file
+        auto data_handler = make_unique<HistoricCSVDataHandler>(
+            config["data"]["csv_filepath"], 
+            config["data"]["symbol"]
+        );
+
+        auto strategy = make_unique<SimpleMovingAverageCrossover>(
+            config["data"]["symbol"],
+            config["strategy"]["short_window"],
+            config["strategy"]["long_window"]
+        );
+
+        auto execution_handler = make_unique<SimulatedExecutionHandler>(
+            config["execution"]["commission_rate"]
+        );
+
         auto portfolio = make_unique<Portfolio>(initial_capital);
         portfolio_ptr = portfolio.get();
 
-        // Create all the other components
-        auto data_handler = make_unique<HistoricCSVDataHandler>(csv_filepath, symbol);
-        auto strategy = make_unique<SimpleMovingAverageCrossover>(symbol, short_window, long_window);
-        auto execution_handler = make_unique<SimulatedExecutionHandler>(0.001);
-
-        // Create the Backtester, moving ownership of components to it.
+        // Inject Dependencies into the Backtester
+        // The Backtester is constructed with the abstract base classes,
+        // completely unaware of the concrete implementations.
         auto backtester = make_unique<Backtester>(
             move(data_handler), 
             move(strategy), 
             move(execution_handler),
-            portfolio_ptr // Pass the raw pointer
+            portfolio_ptr
         );
 
-        // Run the backtest!
+        // Run the backtest 
         backtester->run();
 
-    } catch (const runtime_error& e) {
-        cerr << "Error: " << e.what() << endl;
+    } catch (const exception& e) {
+        cerr << "Runtime Error: " << e.what() << endl;
         return 1;
     }
 
-    // --- Generate and Display Final Performance Report ---
+    // Generate and Display Final Performance Report
     cout << "\n<><><><><><><><><><><><><><><><><><><><><><><><><>" << endl;
     cout << "           STRATEGY PERFORMANCE REPORT" << endl;
     cout << "<><><><><><><><><><><><><><><><><><><><><><><><><>" << endl;
 
     if (portfolio_ptr) {
-        // Create the performance calculator from the portfolio's results
         Performance perf(portfolio_ptr->getEquityCurve(), initial_capital);
-
-        cout << fixed << setprecision(2); // Format output
+        cout << fixed << setprecision(2);
 
         cout << "\n--- OVERVIEW ---" << endl;
         cout << "Initial Capital:       $" << initial_capital << endl;

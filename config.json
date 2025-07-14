@@ -1,0 +1,17 @@
+{
+  "initial_capital": 100000.0,
+  "data": {
+    "handler": "historic_csv",
+    "symbol": "BTCUSDT",
+    "csv_filepath": "data/BTCUSDT-1h-2025-07-13.csv"
+  },
+  "strategy": {
+    "name": "sma_crossover",
+    "short_window": 10,
+    "long_window": 25
+  },
+  "execution": {
+    "handler": "simulated",
+    "commission_rate": 0.001
+  }
+}
