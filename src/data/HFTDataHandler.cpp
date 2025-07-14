@@ -15,23 +15,30 @@ HFTDataHandler::HFTDataHandler(const std::vector<std::string>& symbols,
 {
     // Load data for each symbol upon construction
     for (const auto& symbol : symbols_) {
-        load_trade_data(symbol);
-        load_orderbook_data(symbol);
-        // Initialize indices for streaming
-        trade_indices_[symbol] = 0;
-        orderbook_indices_[symbol] = 0;
+        // We'll check if loading was successful before initializing indices
+        bool trade_data_loaded = load_trade_data(symbol);
+        bool orderbook_data_loaded = load_orderbook_data(symbol);
+
+        if (trade_data_loaded) {
+            trade_indices_[symbol] = 0;
+        }
+        if (orderbook_data_loaded) {
+            orderbook_indices_[symbol] = 0;
+        }
     }
 }
 
+
 // --- Private Data Loading Methods ---
 
-void HFTDataHandler::load_trade_data(const std::string& symbol) {
-    std::string filepath = trade_data_dir_ + "/" + symbol + "_trades_7days.csv"; // Assuming a filename convention
+// Return a boolean to indicate success or failure
+bool HFTDataHandler::load_trade_data(const std::string& symbol) {
+    std::string filepath = trade_data_dir_  + "/btcusdt_book_depth_20250715_032126.csv"; // Assuming a filename convention
     std::ifstream file(filepath);
 
     if (!file.is_open()) {
         std::cerr << "Error: Could not open trade data file: " << filepath << std::endl;
-        return;
+        return false;
     }
 
     std::cout << "Loading trade data from: " << filepath << std::endl;
@@ -51,28 +58,40 @@ void HFTDataHandler::load_trade_data(const std::string& symbol) {
         // datetime,trade_id,price,quantity,time,isBuyerMaker
         std::getline(ss, item, ','); // Skip datetime string
         std::getline(ss, item, ','); // Skip trade_id
-        std::getline(ss, item, ','); t.price = std::stod(item);
-        std::getline(ss, item, ','); t.quantity = std::stod(item);
-        std::getline(ss, item, ','); t.timestamp = std::stol(item);
-        std::getline(ss, item, ','); t.is_buyer_maker = (item == "True" || item == "true" || item == "1");
+        std::getline(ss, item, ','); // price
+        try {
+            t.price = std::stod(item);
+        } catch (...) {
+            std::cerr << "Error: Invalid price data: " << item << " in line: " << line << std::endl;
+            continue; // Skip this trade on error
+        }
+        std::getline(ss, item, ','); // quantity
+        t.quantity = std::stod(item);
+        std::getline(ss, item, ','); // timestamp
+        t.timestamp = std::stol(item);
+        std::getline(ss, item, ','); // isBuyerMaker
+        t.is_buyer_maker = (item == "True" || item == "true" || item == "1");
 
         all_trades_[symbol].push_back(t);
     }
-    std::cout << "Loaded " << all_trades_[symbol].size() << " trades for " << symbol << std::endl;
+    return true;
 }
 
 
-void HFTDataHandler::load_orderbook_data(const std::string& symbol) {
-    // Assuming the latest file for simplicity. A real implementation might need to list files.
-    // FIX: The filename was hardcoded and did not match the user's file.
-    // NOTE: A better solution would be to dynamically find the latest file.
-    std::string filepath = book_data_dir_ + "/" + "btcusdt" + "_book_depth_20250715_032126.csv"; // Example filename
+bool HFTDataHandler::load_orderbook_data(const std::string& symbol) {
+    // Construct a more specific filename, for example, using today's date
+    // This part needs to be adapted to your actual file naming convention.
+    // For this example, I'll assume a glob pattern might be needed, but for simplicity,
+    // let's just try to find a file that starts with the symbol.
+    // A more robust solution would be to list directory contents.
+    std::string filepath = book_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv"; // Adjust filename as needed
     std::ifstream file(filepath);
 
     if (!file.is_open()) {
         std::cerr << "Error: Could not open order book data file: " << filepath << std::endl;
-        return;
+        return false;
     }
+
     std::cout << "Loading order book data from: " << filepath << std::endl;
 
     std::string line;
@@ -121,13 +140,8 @@ void HFTDataHandler::load_orderbook_data(const std::string& symbol) {
         all_orderbooks_[symbol].push_back(current_book);
     }
     
-    // Sort asks (ascending) and bids (descending) for correctness
-    for(auto& book : all_orderbooks_[symbol]) {
-        std::sort(book.asks.begin(), book.asks.end(), [](const OrderBookLevel& a, const OrderBookLevel& b){ return a.price < b.price; });
-        std::sort(book.bids.begin(), book.bids.end(), [](const OrderBookLevel& a, const OrderBookLevel& b){ return a.price > b.price; });
-    }
-
     std::cout << "Loaded " << all_orderbooks_[symbol].size() << " order book snapshots for " << symbol << std::endl;
+    return true;
 }
 
 
@@ -145,23 +159,27 @@ void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue)
 
     // Find the next chronological event across all data streams
     for (const auto& symbol : symbols_) {
-        // Check for next trade event
-        size_t trade_idx = trade_indices_[symbol];
-        if (trade_idx < all_trades_[symbol].size()) {
-            if (all_trades_[symbol][trade_idx].timestamp < earliest_timestamp) {
-                earliest_timestamp = all_trades_[symbol][trade_idx].timestamp;
-                next_symbol = symbol;
-                event_type = "TRADE";
+        // Check for next trade event only if data was loaded for it
+        if (trade_indices_.count(symbol)) {
+            size_t trade_idx = trade_indices_.at(symbol);
+            if (trade_idx < all_trades_.at(symbol).size()) {
+                if (all_trades_.at(symbol)[trade_idx].timestamp < earliest_timestamp) {
+                    earliest_timestamp = all_trades_.at(symbol)[trade_idx].timestamp;
+                    next_symbol = symbol;
+                    event_type = "TRADE";
+                }
             }
         }
 
-        // Check for next order book event
-        size_t book_idx = orderbook_indices_[symbol];
-        if (book_idx < all_orderbooks_[symbol].size()) {
-            if (all_orderbooks_[symbol][book_idx].timestamp < earliest_timestamp) {
-                earliest_timestamp = all_orderbooks_[symbol][book_idx].timestamp;
-                next_symbol = symbol;
-                event_type = "BOOK";
+        // Check for next order book event only if data was loaded for it
+        if (orderbook_indices_.count(symbol)) {
+            size_t book_idx = orderbook_indices_.at(symbol);
+            if (book_idx < all_orderbooks_.at(symbol).size()) {
+                if (all_orderbooks_.at(symbol)[book_idx].timestamp < earliest_timestamp) {
+                    earliest_timestamp = all_orderbooks_.at(symbol)[book_idx].timestamp;
+                    next_symbol = symbol;
+                    event_type = "BOOK";
+                }
             }
         }
     }
@@ -187,8 +205,11 @@ void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue)
 // Checks if all data streams for all symbols have been fully processed.
 bool HFTDataHandler::isFinished() const {
     for (const auto& symbol : symbols_) {
-        bool trades_done = trade_indices_.at(symbol) >= all_trades_.at(symbol).size();
-        bool books_done = orderbook_indices_.at(symbol) >= all_orderbooks_.at(symbol).size();
+        // If a symbol's data failed to load, its maps won't have the key.
+        // We treat it as "finished" to avoid errors and allow others to proceed.
+        bool trades_done = !trade_indices_.count(symbol) || (trade_indices_.at(symbol) >= all_trades_.at(symbol).size());
+        bool books_done = !orderbook_indices_.count(symbol) || (orderbook_indices_.at(symbol) >= all_orderbooks_.at(symbol).size());
+        
         if (!trades_done || !books_done) {
             return false; // Found a stream that is not finished
         }

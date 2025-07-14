@@ -35,10 +35,10 @@ public:
 
 private:
     // Helper function to load a trade CSV file for a given symbol.
-    void load_trade_data(const std::string& symbol);
+    bool load_trade_data(const std::string& symbol);
 
     // Helper function to load an order book CSV file for a given symbol.
-    void load_orderbook_data(const std::string& symbol);
+    bool load_orderbook_data(const std::string& symbol);
 
     std::vector<std::string> symbols_; // List of symbols we are tracking.
 
