@@ -27,6 +27,13 @@ public:
     // Gets the most recently loaded bar for a specific symbol.
     // The Strategy and Portfolio will use this to get detailed OHLCV data.
     virtual optional<Bar> getLatestBar(const string& symbol) const = 0;
+
+    // Gets the last known value for a symbol (e.g., "price").
+    // This provides a unified way to get the latest price, whether
+    virtual double getLatestBarValue(const std::string& symbol, const std::string& val_type) = 0;
+
+    // Gets the n most recently loaded bars for a specific symbol.
+    virtual std::vector<Bar> getLatestBars(const std::string& symbol, int n = 1) = 0;
 };
 
-#endif 
+#endif

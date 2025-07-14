@@ -8,8 +8,10 @@ PairTradingStrategy::PairTradingStrategy(
     std::string symbol_b, 
     int window, 
     double z_score_threshold,
-    std::shared_ptr<DataHandler> data_handler)
-    : symbol_a(std::move(symbol_a)), 
+    std::shared_ptr<DataHandler> data_handler,
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> events_queue)
+    : Strategy(events_queue),
+      symbol_a(std::move(symbol_a)), 
       symbol_b(std::move(symbol_b)), 
       window(window), 
       z_score_threshold(z_score_threshold),
@@ -18,62 +20,77 @@ PairTradingStrategy::PairTradingStrategy(
         latest_prices[this->symbol_b] = 0.0;
 }
 
-void PairTradingStrategy::generateSignals(
-    const MarketEvent& event, 
-    std::queue<std::shared_ptr<Event>>& event_queue
+void PairTradingStrategy::onMarket(
+    const MarketEvent& event
 ) {
-    // 1. Get the latest bar and check if it's valid
-    auto latest_bar_opt = data_handler->getLatestBar(event.symbol);
-    if (!latest_bar_opt) {
-        return; // No bar data for this symbol yet, do nothing.
-    }
-    // Update the internal price map
-    latest_prices[event.symbol] = latest_bar_opt->close;
-
-    // 2. Check if we have prices for both assets
-    if (latest_prices[symbol_a] <= 0.0 || latest_prices[symbol_b] <= 0.0) {
-        return; // Not ready yet, wait for both prices
+    if (event.symbol != symbol_a && event.symbol != symbol_b) {
+        return;
     }
 
-    // 3. Calculate the new price ratio and add to history
-    double current_ratio = latest_prices[symbol_a] / latest_prices[symbol_b];
-    ratio_history.push_back(current_ratio);
+    // Update the latest prices from the data handler
+    auto bar_opt = data_handler->getLatestBar(event.symbol);
+    if (!bar_opt) {
+        return; // No bar data available
+    }
+    latest_prices[event.symbol] = bar_opt->close;
 
+    // Ensure we have prices for both symbols
+    if (latest_prices[symbol_a] == 0.0 || latest_prices[symbol_b] == 0.0) {
+        return;
+    }
+
+    // Calculate the new price ratio and add it to our history
+    double price_a = latest_prices[symbol_a];
+    double price_b = latest_prices[symbol_b];
+    if (price_b == 0) return; // Avoid division by zero
+    double ratio = price_a / price_b;
+    ratio_history.push_back(ratio);
+
+    // Don't generate signals until we have enough data
     if (ratio_history.size() < window) {
-        return; // Need more data
+        return;
     }
-    
-    // 4. Calculate moving average and standard deviation
-    auto first = ratio_history.end() - window;
-    auto last = ratio_history.end();
-    
-    double sum = std::accumulate(first, last, 0.0);
+
+    // Keep the history to the size of the window
+    if (ratio_history.size() > window) {
+        ratio_history.erase(ratio_history.begin());
+    }
+
+    // Calculate the z-score
+    double sum = std::accumulate(ratio_history.begin(), ratio_history.end(), 0.0);
     double mean = sum / window;
-    
-    double sq_sum = std::inner_product(first, last, first, 0.0);
+    double sq_sum = std::inner_product(ratio_history.begin(), ratio_history.end(), ratio_history.begin(), 0.0);
     double std_dev = std::sqrt(sq_sum / window - mean * mean);
+    if (std_dev < 1e-8) return; // Avoid division by zero if standard deviation is too small
+    double z_score = (ratio - mean) / std_dev;
 
-    if (std_dev < 1e-6) return; // Avoid division by zero
-
-    // 5. Calculate the Z-score and generate signals
-    double z_score = (current_ratio - mean) / std_dev;
     auto timestamp = event.timestamp;
 
-    if (current_position == PositionState::NONE) {
-        if (z_score > z_score_threshold) { // Short the pair
-            event_queue.push(std::make_shared<SignalEvent>(symbol_a, timestamp, "SHORT"));
-            event_queue.push(std::make_shared<SignalEvent>(symbol_b, timestamp, "LONG"));
-            current_position = PositionState::SHORT;
-        } else if (z_score < -z_score_threshold) { // Long the pair
-            event_queue.push(std::make_shared<SignalEvent>(symbol_a, timestamp, "LONG"));
-            event_queue.push(std::make_shared<SignalEvent>(symbol_b, timestamp, "SHORT"));
-            current_position = PositionState::LONG;
+    // --- Trading Logic ---
+    if (z_score > z_score_threshold && current_position != PositionState::SHORT) {
+        // Short the pair (sell A, buy B)
+        if (current_position == PositionState::LONG) {
+            // Close existing long position first
+            events_queue_->push(std::make_shared<SignalEvent>(symbol_a, timestamp, "EXIT"));
+            events_queue_->push(std::make_shared<SignalEvent>(symbol_b, timestamp, "EXIT"));
         }
-    }
-    else if ((current_position == PositionState::SHORT && z_score < 0.5) ||
-             (current_position == PositionState::LONG && z_score > -0.5)) { // Exit logic
-        event_queue.push(std::make_shared<SignalEvent>(symbol_a, timestamp, "EXIT"));
-        event_queue.push(std::make_shared<SignalEvent>(symbol_b, timestamp, "EXIT"));
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_a, timestamp, "SELL"));
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_b, timestamp, "BUY"));
+        current_position = PositionState::SHORT;
+    } else if (z_score < -z_score_threshold && current_position != PositionState::LONG) {
+        // Long the pair (buy A, sell B)
+        if (current_position == PositionState::SHORT) {
+            // Close existing short position first
+            events_queue_->push(std::make_shared<SignalEvent>(symbol_a, timestamp, "EXIT"));
+            events_queue_->push(std::make_shared<SignalEvent>(symbol_b, timestamp, "EXIT"));
+        }
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_a, timestamp, "BUY"));
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_b, timestamp, "SELL"));
+        current_position = PositionState::LONG;
+    } else if (std::abs(z_score) < 0.5 && current_position != PositionState::NONE) {
+        // Exit position if z-score approaches zero (the mean)
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_a, timestamp, "EXIT"));
+        events_queue_->push(std::make_shared<SignalEvent>(symbol_b, timestamp, "EXIT"));
         current_position = PositionState::NONE;
     }
 }

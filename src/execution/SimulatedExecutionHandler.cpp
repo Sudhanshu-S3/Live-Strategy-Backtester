@@ -1,5 +1,5 @@
 #include "../../include/execution/SimulatedExecutionHandler.h"
-
+#include <iostream>
 // --- IMPLEMENT THE NEW CONSTRUCTOR ---
 SimulatedExecutionHandler::SimulatedExecutionHandler(
     std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
@@ -8,7 +8,16 @@ SimulatedExecutionHandler::SimulatedExecutionHandler(
 
 
 // --- IMPLEMENT THE NEW EVENT-DRIVEN LOGIC ---
-void SimulatedExecutionHandler::executeOrder(const OrderEvent& order, const Bar& bar) {
+void SimulatedExecutionHandler::onOrder(const OrderEvent& order) {
+    // Get the latest bar for the symbol from the data handler.
+    auto bar_optional = data_handler->getLatestBar(order.symbol);
+
+    if (!bar_optional) {
+        std::cout << "Warning: Could not get latest bar for " << order.symbol << " to execute order." << std::endl;
+        return;
+    }
+    const Bar& bar = *bar_optional;
+
     // Assume fill at the closing price of the provided bar (a simplification).
     double fill_price = bar.close;
 

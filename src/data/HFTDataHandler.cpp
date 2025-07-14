@@ -28,12 +28,12 @@ HFTDataHandler::HFTDataHandler(const std::vector<std::string>& symbols,
     }
 }
 
-
 // --- Private Data Loading Methods ---
 
 // Return a boolean to indicate success or failure
 bool HFTDataHandler::load_trade_data(const std::string& symbol) {
-    std::string filepath = trade_data_dir_  + "/btcusdt_book_depth_20250715_032126.csv"; // Assuming a filename convention
+    // Use the symbol to construct the filename dynamically.
+    std::string filepath = trade_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv";
     std::ifstream file(filepath);
 
     if (!file.is_open()) {
@@ -79,12 +79,9 @@ bool HFTDataHandler::load_trade_data(const std::string& symbol) {
 
 
 bool HFTDataHandler::load_orderbook_data(const std::string& symbol) {
-    // Construct a more specific filename, for example, using today's date
-    // This part needs to be adapted to your actual file naming convention.
-    // For this example, I'll assume a glob pattern might be needed, but for simplicity,
-    // let's just try to find a file that starts with the symbol.
-    // A more robust solution would be to list directory contents.
-    std::string filepath = book_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv"; // Adjust filename as needed
+    
+    // Use the symbol to construct the filename dynamically.
+    std::string filepath = book_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv";
     std::ifstream file(filepath);
 
     if (!file.is_open()) {
@@ -189,6 +186,7 @@ void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue)
         if (event_type == "TRADE") {
             size_t& idx = trade_indices_[next_symbol];
             Trade& trade_data = all_trades_[next_symbol][idx];
+            latest_prices_[next_symbol] = trade_data.price; // Update latest price
             event_queue.push(std::make_shared<TradeEvent>(trade_data));
             idx++;
         } else if (event_type == "BOOK") {
@@ -200,7 +198,6 @@ void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue)
     }
 }
 
-// --- Implemented Virtual Functions ---
 
 // Checks if all data streams for all symbols have been fully processed.
 bool HFTDataHandler::isFinished() const {
@@ -222,4 +219,21 @@ bool HFTDataHandler::isFinished() const {
 std::optional<Bar> HFTDataHandler::getLatestBar(const std::string& symbol) const {
     // Not applicable for HFT data model, but must be implemented.
     return std::nullopt;
+}
+
+// HFT data is not bar-based, so this returns an empty vector.
+std::vector<Bar> HFTDataHandler::getLatestBars(const std::string& symbol, int n) {
+    return {};
+}
+
+// Provides the last known price to other components like the Portfolio.
+double HFTDataHandler::getLatestBarValue(const std::string& symbol, const std::string& val_type) {
+    if (val_type == "price") { 
+        auto it = latest_prices_.find(symbol);
+        if (it != latest_prices_.end()) {
+            return it->second;
+        }
+    }
+    // Return 0.0 if the symbol or price is not found.
+    return 0.0;
 }

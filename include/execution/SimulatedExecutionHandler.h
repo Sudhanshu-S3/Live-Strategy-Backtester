@@ -16,7 +16,7 @@ public:
     );
 
     // The method signature is simple: it receives an order and processes it.
-    void executeOrder(const OrderEvent& order, const Bar& bar) override;
+    void onOrder(const OrderEvent& order) override;
 
 private:
     std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue;

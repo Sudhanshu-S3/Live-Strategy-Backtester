@@ -23,6 +23,7 @@ add_executable(backtester
     src/data/HistoricCSVDataHandler.cpp
     src/data/HFTDataHandler.cpp
     src/strategy/PairTradingStrategy.cpp
+    src/strategy/OrderBookImbalanceStrategy.cpp
     src/core/Backtester.cpp
     src/execution/SimulatedExecutionHandler.cpp
     src/core/Portfolio.cpp

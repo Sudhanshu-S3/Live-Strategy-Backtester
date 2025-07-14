@@ -1,11 +1,13 @@
 #include "../../include/core/Portfolio.h"
-#include <numeric> // For std::accumulate
+#include "../../include/data/DataTypes.h" // Make sure this is included for Event types
 #include <iostream>
+#include <numeric>
 
-Portfolio::Portfolio(double initial_capital, std::shared_ptr<DataHandler> data_handler)
+Portfolio::Portfolio(double initial_capital, std::shared_ptr<DataHandler> data_handler, std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue)
     : initial_capital(initial_capital), 
       current_cash(initial_capital), 
-      data_handler(data_handler) {}
+      data_handler(data_handler),
+      event_queue(event_queue) {}
 
 void Portfolio::onFill(const FillEvent& fill) {
     if (fill.direction == "BUY") {
@@ -37,6 +39,44 @@ void Portfolio::onFill(const FillEvent& fill) {
             // This would be an error in a real system (selling something you don't own)
             // but we'll log it for now.
             std::cerr << "Warning: Sold asset " << fill.symbol << " without a holding." << std::endl;
+        }
+    }
+}
+
+// Processes a signal from the Strategy to generate an OrderEvent.
+void Portfolio::onSignal(const SignalEvent& signal) {
+    std::string order_direction = "";
+    int order_quantity = 100; // Example: default order size, you can make this more sophisticated.
+
+    if (signal.signal_type == "LONG") {
+        order_direction = "BUY";
+    } else if (signal.signal_type == "SHORT") {
+        order_direction = "SELL";
+    } else if (signal.signal_type == "EXIT") {
+        auto it = holdings.find(signal.symbol);
+        if (it != holdings.end() && it->second.quantity > 0) {
+            order_direction = "SELL"; // Assuming we are closing a long position
+            order_quantity = static_cast<int>(it->second.quantity);
+        } else {
+            return; // No position to exit
+        }
+    }
+
+    if (!order_direction.empty() && order_quantity > 0) {
+        // Create an OrderEvent and push it to the event queue.
+        auto order = std::make_shared<OrderEvent>(signal.symbol, "MARKET", order_quantity, order_direction);
+        event_queue->push(order);
+    }
+}
+
+// Updates the market value of a specific holding based on a market event.
+void Portfolio::onMarket(const MarketEvent& market) {
+    auto it = holdings.find(market.symbol);
+    if (it != holdings.end()) {
+        // Use the latest price from the DataHandler to update the market value
+        double latest_price = data_handler->getLatestBarValue(market.symbol, "close");
+        if (latest_price > 0) { // Ensure we have a valid price
+             it->second.market_value = it->second.quantity * latest_price;
         }
     }
 }

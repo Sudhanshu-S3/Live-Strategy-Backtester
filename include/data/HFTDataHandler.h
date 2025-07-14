@@ -31,6 +31,12 @@ public:
     // HFT data is event-driven (trades/books), not bar-based.
     // This function is not applicable and returns no data.
     std::optional<Bar> getLatestBar(const std::string& symbol) const override;
+    
+    // Get the last known value for a symbol (e.g., price). Overrides
+    double getLatestBarValue(const std::string& symbol, const std::string& val_type) override;
+
+    // This function is not applicable and returns no data.
+    std::vector<Bar> getLatestBars(const std::string& symbol, int n = 1) override; 
 
 
 private:
@@ -53,6 +59,7 @@ private:
     // Pointers (indices) to the current position in each data vector for streaming.
     std::map<std::string, size_t> trade_indices_;
     std::map<std::string, size_t> orderbook_indices_;
+    std::map<std::string, double> latest_prices_;
 };
 
 #endif // HFT_DATA_HANDLER_H

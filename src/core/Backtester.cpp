@@ -47,42 +47,46 @@ void Backtester::run() {
 }
 
 // --- Event Handling Logic ---
-// Updated to handle all event types, including new HFT events
+// Consolidated and corrected to handle all event types properly.
 void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
-    // Note: Using a switch statement is often more efficient than multiple dynamic_pointer_casts
+    // For high-frequency backtesting, update the portfolio's mark-to-market value on every event.
+    if (portfolio) {
+        portfolio->updateTimeIndex();
+    }
+
     switch (event->type) {
-        case Event::MARKET:
-            // For now, these are disabled as we test the HFT pipeline
-            // if (portfolio) portfolio->onMarket(static_cast<MarketEvent&>(*event));
-            // if (strategy) strategy->onMarket(static_cast<MarketEvent&>(*event));
+        case Event::MARKET: {
+            auto& market_event = static_cast<MarketEvent&>(*event);
+            if (strategy) strategy->onMarket(market_event);
+            if (portfolio) portfolio->onMarket(market_event);
             break;
-        
-        case Event::TRADE: { // NEW CASE
+        }
+        case Event::TRADE: {
             auto& trade_event = static_cast<TradeEvent&>(*event);
-            // You can uncomment the line below to see the stream of trades
-            // std::cout << "Trade | " << trade_event.trade.symbol << " | Price: " << trade_event.trade.price << std::endl;
+            if (strategy) strategy->onTrade(trade_event);
             break;
         }
-
-        case Event::ORDERBOOK: { // NEW CASE
+        case Event::ORDERBOOK: {
             auto& book_event = static_cast<OrderBookEvent&>(*event);
-            // Uncommenting this will produce a massive amount of output
-            // std::cout << "Book | " << book_event.book.symbol << " | Top Bid: " << book_event.book.bids[0].price << std::endl;
+            if (strategy) strategy->onOrderBook(book_event);
             break;
         }
-
-        case Event::SIGNAL:
-            // if (portfolio) portfolio->onSignal(static_cast<SignalEvent&>(*event));
+        case Event::SIGNAL: {
+            auto& signal_event = static_cast<SignalEvent&>(*event);
+            if (portfolio) portfolio->onSignal(signal_event);
             break;
-
-        case Event::ORDER:
-            // if (execution_handler) execution_handler->onOrder(static_cast<OrderEvent&>(*event));
+        }
+        case Event::ORDER: {
+            auto& order_event = static_cast<OrderEvent&>(*event);
+            if (execution_handler) execution_handler->onOrder(order_event);
             break;
-
-        case Event::FILL:
-            // if (portfolio) portfolio->onFill(static_cast<FillEvent&>(*event));
+        }
+        case Event::FILL: {
+            auto& fill_event = static_cast<FillEvent&>(*event);
+            if (portfolio) portfolio->onFill(fill_event);
+            if (strategy) strategy->onFill(fill_event); // Allow strategy to react to its own fills
             break;
-
+        }
         default:
             std::cout << "Warning: Unknown event type received in Backtester." << std::endl;
             break;

@@ -6,7 +6,12 @@
     "book_data_dir": "historical_data"
   },
   "strategy": {
-    "name": "MICROSTRUCTURE_TEST",
-    "params": {}
+    "name": "ORDER_BOOK_IMBALANCE",
+    "symbol": "BTCUSDT",
+    "params": {
+      "lookback_levels": 5,
+      "buy_threshold": 0.7,
+      "sell_threshold": 0.3
+    }
   }
 }
