@@ -6,8 +6,6 @@
 
 using namespace std;
 
-// --- Bar and Signal Types (from Day 1) ---
-
 struct Bar {
     uint64_t timestamp;
     double open;
@@ -30,24 +28,21 @@ struct SignalEvent {
     SignalType type;
 };
 
-// --- New for Day 2: Order and Fill Types ---
 
-// Defines the direction of an order.
 enum class OrderDirection {
     BUY,
     SELL
 };
 
-// Represents an instruction to the execution system to place a trade.
+
 struct OrderEvent {
     uint64_t timestamp;
     string symbol;
     OrderDirection direction;
     double quantity;
-    // In a real system, you'd also have order_type (MARKET, LIMIT), etc.
 };
 
-// Represents a filled order, confirming a trade has occurred.
+
 struct FillEvent {
     uint64_t timestamp;
     string symbol;
@@ -57,4 +52,4 @@ struct FillEvent {
     double commission;
 };
 
-#endif // DATATYPES_H
+#endif 

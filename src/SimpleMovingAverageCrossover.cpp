@@ -31,7 +31,7 @@ SignalEvent SimpleMovingAverageCrossover::generateSignals(const Bar& bar) {
     double long_sma_now = calculate_sma(long_window);
 
     // To detect a crossover, we need the previous state.
-    // We calculate the SMA for the period ending at the *previous* bar.
+
     vector<double> prev_prices(prices.begin(), prices.end() - 1);
     double prev_short_sma = 0.0;
     double prev_long_sma = 0.0;
@@ -44,7 +44,7 @@ SignalEvent SimpleMovingAverageCrossover::generateSignals(const Bar& bar) {
     }
 
     // Check for crossover conditions
-    // Golden Cross (LONG signal): Short SMA was below Long SMA, and now it's above.
+    
     if (prev_short_sma < prev_long_sma && short_sma_now > long_sma_now) {
         return { bar.timestamp, this->symbol, SignalType::LONG };
     }

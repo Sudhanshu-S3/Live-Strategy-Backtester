@@ -9,7 +9,7 @@
 class SimulatedExecutionHandler : public ExecutionHandler {
 public:
     // Constructor can take configuration like commission rate.
-    SimulatedExecutionHandler(double commission_rate = 0.001); // 0.1% commission
+    SimulatedExecutionHandler(double commission_rate = 0.001);
 
     // Override the virtual function from the base class.
     FillEvent executeOrder(const OrderEvent& order, const Bar& bar) override;

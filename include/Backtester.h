@@ -3,31 +3,30 @@
 
 #include "DataHandler.h"
 #include "Strategy.h"
-#include "ExecutionHandler.h" // New include
+#include "ExecutionHandler.h"
+#include "Portfolio.h" 
 #include <memory>
 
 using namespace std;
 
-// The main backtesting engine.
 class Backtester {
+public:
+    
+    Backtester(
+        unique_ptr<DataHandler> data_handler, 
+        unique_ptr<Strategy> strategy,
+        unique_ptr<ExecutionHandler> execution_handler,
+        Portfolio* portfolio 
+    );
+
+    
+    void run();
 
 private:
     unique_ptr<DataHandler> data_handler;
     unique_ptr<Strategy> strategy;
     unique_ptr<ExecutionHandler> execution_handler;
-    
-public:
-    // Constructor now takes an ExecutionHandler as well.
-    Backtester(
-        unique_ptr<DataHandler> data_handler, 
-        unique_ptr<Strategy> strategy,
-        unique_ptr<ExecutionHandler> execution_handler
-    );
-
-    // Runs the backtest event loop.
-    void run();
-
- // New member
+    Portfolio* portfolio; 
 };
 
-#endif 
+#endif

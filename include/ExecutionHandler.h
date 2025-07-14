@@ -7,7 +7,7 @@
 
 using namespace std;
 
-// Abstract base class for handling order execution.
+
 class ExecutionHandler {
 public:
     virtual ~ExecutionHandler() = default;

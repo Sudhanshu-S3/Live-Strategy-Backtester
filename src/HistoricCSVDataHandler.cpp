@@ -31,7 +31,6 @@ HistoricCSVDataHandler::HistoricCSVDataHandler(const string& csv_filepath, const
         getline(ss, timestamp_str, ',');
         bar.timestamp = stoull(timestamp_str);
 
-        // Read open, high, low, close, volume
         getline(ss, item, ',');
         bar.open = stod(item);
         getline(ss, item, ',');
@@ -52,17 +51,15 @@ HistoricCSVDataHandler::HistoricCSVDataHandler(const string& csv_filepath, const
 }
 
 
-optional<Bar> HistoricCSVDataHandler::getLatestBar() {
-    
-    if (bar_iterator != bars.cend()) {
-
-        Bar bar = *bar_iterator;
-        
-        ++bar_iterator;
-    
-        return bar;
-    } else {
-        
-        return nullopt;
+optional<pair<string, Bar>> HistoricCSVDataHandler::getLatestBar() {
+    if (bar_iterator != bars.end()) {
+        const Bar& bar = *bar_iterator;
+        bar_iterator++;
+        return {{this->symbol, bar}};
     }
+    return nullopt; 
+}
+
+void HistoricCSVDataHandler::parse_csv() {
+    
 }
