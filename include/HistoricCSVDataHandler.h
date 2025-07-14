@@ -22,8 +22,7 @@ private:
     vector<Bar> bars;
     vector<Bar>::const_iterator bar_iterator;
 
-    // A private helper function to parse the CSV file.
     void parse_csv();
 };
 
-#endif // HISTORIC_CSV_DATA_HANDLER_H
+#endif 

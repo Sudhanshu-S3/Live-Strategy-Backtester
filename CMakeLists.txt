@@ -16,6 +16,7 @@ add_executable(backtester
     src/HistoricCSVDataHandler.cpp
     src/Backtester.cpp
     src/SimpleMovingAverageCrossover.cpp
+    src/SimulatedExecutionHandler.cpp
 )
 
 # Link libraries if any (none in this case, but good practice to have)
