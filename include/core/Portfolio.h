@@ -32,6 +32,9 @@ public:
     // Getter for the equity curve
     const std::vector<double>& getEquityCurve() const;
 
+    // Getter for current cash
+    double getCurrentCash() const { return current_cash; }
+
 private:
     std::shared_ptr<DataHandler> data_handler;
     double initial_capital;

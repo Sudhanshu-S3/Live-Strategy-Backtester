@@ -1,5 +1,16 @@
 #include "../../include/core/Backtester.h"
 #include <iostream>
+#include <iomanip> // For std::put_time
+#include <sstream> // For std::stringstream
+
+// Helper function to format timestamp for printing
+std::string format_timestamp(const std::chrono::system_clock::time_point& tp) {
+    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+    std::tm tm = *std::localtime(&time);
+    std::stringstream ss;
+    ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return ss.str();
+}
 
 // Constructor initializes all the shared pointers and the backtest flag.
 Backtester::Backtester(
@@ -78,19 +89,18 @@ void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
         );
         event_queue->push(order); // Push the new OrderEvent onto the queue.
     }
-    else if (auto order_event = std::dynamic_pointer_cast<OrderEvent>(event)) {
-        // An order needs to be executed.
-        // We need the latest bar for the symbol to simulate the execution price.
-        auto bar = data_handler->getLatestBar(order_event->symbol);
-        if (bar) {
-            execution_handler->executeOrder(*order_event, *bar);
-        } else {
-            std::cerr << "Could not get latest bar for symbol " << order_event->symbol << " to execute order."
-                      << std::endl;
-        }
-    }
+    
     else if (auto fill_event = std::dynamic_pointer_cast<FillEvent>(event)) {
         // The order was filled. Update the portfolio with the trade details.
         portfolio->onFill(*fill_event);
+
+        std::cout << "--------------------------------------------------------\n"
+                << "          TRADE EXECUTED AT " << format_timestamp(fill_event->timestamp) << "\n"
+                << "--------------------------------------------------------\n"
+                << "  => " << fill_event->direction << " " << fill_event->quantity
+                << " of " << fill_event->symbol << " at $" << fill_event->fill_price << "\n"
+                << "  => Commission: $" << fill_event->commission << "\n"
+                << "  => Portfolio Cash: $" << portfolio->getCurrentCash() << "\n" // Assumes a getCurrentCash() method
+                << "--------------------------------------------------------\n" << std::endl;
     }
-}
+};
