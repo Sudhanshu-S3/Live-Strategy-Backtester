@@ -11,7 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(include)
 
 # Add the executable, specify its name and ALL its source files
-add_executable(backtester 
+add_executable(backtester
     src/main.cpp
     src/HistoricCSVDataHandler.cpp
+    src/Backtester.cpp
+    src/SimpleMovingAverageCrossover.cpp
 )
+
+# Link libraries if any (none in this case, but good practice to have)

@@ -1,56 +1,37 @@
 #include <iostream>
 #include <memory>
-#include <stdexcept>
 #include "HistoricCSVDataHandler.h"
-#include "DataTypes.h"
+#include "SimpleMovingAverageCrossover.h"
+#include "Backtester.h"
 
 using namespace std;
 
-string signalTypeToString(SignalType type) {
-    switch (type) {
-        case SignalType::LONG: return "LONG";
-        case SignalType::SHORT: return "SHORT";
-        case SignalType::EXIT: return "EXIT";
-        case SignalType::DO_NOTHING: return "DO_NOTHING";
-        default: return "UNKNOWN";
-    }
-}
-
 int main() {
-    cout << "Testing HistoricCSVDataHandler..." << endl;
-
-    // Define the path to your data file.
-    // Ensure the 'data' directory is in your project root.
+    cout << "Starting SMA Crossover Backtest..." << endl;
     const string csv_filepath = "../data/BTCUSDT-1h-2025-07-13.csv";
     const string symbol = "BTCUSDT";
+    const int short_window = 10;
+    const int long_window = 25;
 
     try {
-        // Create the data handler
+        // Create the Data Handler
         auto data_handler = make_unique<HistoricCSVDataHandler>(csv_filepath, symbol);
 
-        cout << "\n--- Reading Bars from CSV ---" << endl;
+        // Create the Strategy
+        auto strategy = make_unique<SimpleMovingAverageCrossover>(symbol, short_window, long_window);
 
-        // Loop to get all bars from the handler
-        while (auto bar_optional = data_handler->getLatestBar()) {
-            // The optional contains a value, so we can access it
-            const Bar& bar = *bar_optional;
-            
-            cout << "Timestamp: " << bar.timestamp
-                    << ", Open: " << bar.open
-                    << ", High: " << bar.high
-                    << ", Low: " << bar.low
-                    << ", Close: " << bar.close
-                    << ", Volume: " << bar.volume << endl;
-        }
+        // Create the Backtester and pass it the data and strategy
+        auto backtester = make_unique<Backtester>(move(data_handler), move(strategy));
 
-        cout << "\n--- End of Data ---" << endl;
+        // Run the backtest!
+        backtester->run();
 
     } catch (const runtime_error& e) {
         cerr << "Error: " << e.what() << endl;
         return 1;
     }
 
-    cout << "\nTest complete. Data handler is working!" << endl;
+    cout << "\nBacktest complete!" << endl;
 
     return 0;
 }
