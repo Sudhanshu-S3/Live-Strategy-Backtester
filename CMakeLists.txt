@@ -7,16 +7,23 @@ project(Live_Strategy_Backtester)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add both 'include' and 'lib' to the include paths
-include_directories(include lib)
+# Add 'include' and 'lib' to the include paths
+include_directories(
+    include
+    lib
+    include/core
+    include/data
+    include/execution
+    include/strategy
+)
 
 # Add all our .cpp files to the executable target
 add_executable(backtester 
     src/main.cpp
-    src/HistoricCSVDataHandler.cpp
-    src/SimpleMovingAverageCrossover.cpp
-    src/Backtester.cpp
-    src/SimulatedExecutionHandler.cpp
-    src/Portfolio.cpp
-    src/Performance.cpp
+    src/data/HistoricCSVDataHandler.cpp
+    src/strategy/SimpleMovingAverageCrossover.cpp
+    src/core/Backtester.cpp
+    src/execution/SimulatedExecutionHandler.cpp
+    src/core/Portfolio.cpp
+    src/core/Performance.cpp
 )
