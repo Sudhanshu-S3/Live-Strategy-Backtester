@@ -5,6 +5,7 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <thread> // STAGE 1: Required for multi-threading
 
 #include "../lib/nlohmann/json.hpp"
 
@@ -15,64 +16,48 @@
 #include "strategy/OrderBookImbalanceStrategy.h"
 #include "execution/SimulatedExecutionHandler.h"
 #include "core/Portfolio.h"
-#include "risk/RishManager.h" // Corrected include path
+#include "risk/RishManager.h" 
 #include "core/Backtester.h"
+#include "core/Performance.h"
 
 using json = nlohmann::json;
 
-int main() {
-    std::cout << "Starting Backtester..." << std::endl;
-
-    json config;
+// STAGE 1: Encapsulates the logic for a single backtest instance to be run in a thread
+void run_backtest_instance(const json& strategy_config, const json& global_config) {
     try {
-        std::ifstream config_file("config.json");
-        if (!config_file.is_open()) {
-            throw std::runtime_error("Could not open config.json");
+        std::string strategy_name = strategy_config["name"];
+        std::cout << "Thread " << std::this_thread::get_id() << ": Starting backtest for strategy '" << strategy_name << "'..." << std::endl;
+
+        RunMode mode = RunMode::BACKTEST;
+        if (global_config.contains("run_mode") && global_config["run_mode"] == "SHADOW") {
+            mode = RunMode::SHADOW;
         }
-        config = json::parse(config_file);
-    } catch (const std::exception& e) {
-        std::cerr << "Configuration Error: " << e.what() << std::endl;
-        return 1;
-    }
 
-    try {
-        // 1. Event Queue
+        // Create an isolated environment for this thread
         auto event_queue = std::make_shared<EventQueue>();
-
-        // 2. Data Handler
         auto data_handler = std::make_shared<HFTDataHandler>(
             event_queue,
-            config["symbols"].get<std::vector<std::string>>(),
-            config["data"]["trade_data_dir"].get<std::string>(),
-            config["data"]["book_data_dir"].get<std::string>()
+            global_config["symbols"].get<std::vector<std::string>>(),
+            global_config["data"]["trade_data_dir"].get<std::string>(),
+            global_config["data"]["book_data_dir"].get<std::string>()
         );
-
-        // 3. Portfolio
         auto portfolio = std::make_shared<Portfolio>(
             event_queue,
-            config["initial_capital"],
+            global_config["initial_capital"],
             data_handler
         );
-
-        // 4. Risk Manager
         auto risk_manager = std::make_shared<RiskManager>(
-            *event_queue, *portfolio, config["strategy"]["risk_per_trade_pct"]
+            *event_queue, *portfolio, strategy_config["risk_per_trade_pct"]
         );
-
-        // 5. Execution Handler
         auto execution_handler = std::make_shared<SimulatedExecutionHandler>(event_queue, data_handler);
 
-        // 6. Strategy
         std::shared_ptr<Strategy> strategy;
-        std::string strategy_name = config["strategy"]["name"];
-        std::cout << "Using strategy: " << strategy_name << std::endl;
-
         if (strategy_name == "ORDER_BOOK_IMBALANCE") {
-            auto params = config["strategy"]["params"];
+            auto params = strategy_config["params"];
             strategy = std::make_shared<OrderBookImbalanceStrategy>(
                 event_queue,
                 data_handler,
-                config["strategy"]["symbol"],
+                strategy_config["symbol"],
                 params["lookback_levels"],
                 params["imbalance_threshold"]
             );
@@ -80,33 +65,53 @@ int main() {
             throw std::runtime_error("Strategy not recognized: " + strategy_name);
         }
 
-        // 7. Backtester
         auto backtester = std::make_unique<Backtester>(
-            event_queue,
-            data_handler,
-            strategy,
-            portfolio,
-            execution_handler,
-            risk_manager
+            mode, event_queue, data_handler, strategy, portfolio, execution_handler, risk_manager
         );
-        
-        // 8. Run the backtest
-        std::cout << "Running backtest..." << std::endl;
+
         backtester->run();
-        std::cout << "Backtest finished." << std::endl;
 
-        // 9. Generate and Save Performance Report
-        std::cout << "\n<><><><><><><> PERFORMANCE REPORT <><><><><><><>\n" << std::endl;
+        // Generate report for this specific instance
+        std::string report_filename = "performance_report_" + strategy_name + ".csv";
+        std::cout << "\n<><><><><><><> PERFORMANCE REPORT FOR " << strategy_name << " <><><><><><><>\n" << std::endl;
         portfolio->generateReport();
-        portfolio->writeResultsToCSV("performance_report.csv");
-        std::cout << "Performance report saved to performance_report.csv" << std::endl;
-
+        portfolio->writeResultsToCSV(report_filename);
+        std::cout << "Performance report for " << strategy_name << " saved to " << report_filename << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Runtime Error: " << e.what() << std::endl;
+        std::cerr << "Thread " << std::this_thread::get_id() << " encountered an error: " << e.what() << std::endl;
+    }
+}
+
+
+int main() {
+    std::cout << "Starting Parallel Backtester..." << std::endl;
+
+    json config;
+    try {
+        std::ifstream config_file("config.json");
+        config = json::parse(config_file);
+    } catch (const std::exception& e) {
+        std::cerr << "Configuration Error: " << e.what() << std::endl;
         return 1;
     }
 
-    std::cout << "\nBacktester Complete!" << std::endl;
+    // STAGE 1: Launch a thread for each strategy in the config
+    std::vector<std::thread> backtest_threads;
+    if (config.contains("strategies") && config["strategies"].is_array()) {
+        for (const auto& strategy_config : config["strategies"]) {
+            backtest_threads.emplace_back(run_backtest_instance, strategy_config, config);
+        }
+    } else {
+        std::cerr << "Config error: 'strategies' field must be an array of strategy configurations." << std::endl;
+        return 1;
+    }
+
+    // Wait for all backtest threads to complete
+    for (auto& t : backtest_threads) {
+        t.join();
+    }
+
+    std::cout << "\nAll backtests complete!" << std::endl;
     return 0;
 }

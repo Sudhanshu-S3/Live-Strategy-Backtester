@@ -15,6 +15,13 @@ HistoricCSVDataHandler::HistoricCSVDataHandler(const map<string, string>& csv_fi
     }
 }
 
+// Overloaded constructor for a single CSV (e.g., benchmark)
+HistoricCSVDataHandler::HistoricCSVDataHandler(const string& symbol, const string& filepath) {
+    parse_single_csv(symbol, filepath);
+    current_bar_iterators[symbol] = all_bars.at(symbol).cbegin();
+}
+
+
 // NOTE: This parser assumes a CSV format of:
 // Timestamp,Open,High,Low,Close,Volume
 // e.g., 2023-01-01 00:00:00,30000.1,30005.2,29990.8,30002.5,150.7
@@ -55,6 +62,40 @@ void HistoricCSVDataHandler::parse_all_csvs(const map<string, string>& csv_filep
         all_bars[symbol] = bars_for_symbol;
         cout << "Loaded " << bars_for_symbol.size() << " bars for symbol " << symbol << endl;
     }
+}
+
+void HistoricCSVDataHandler::parse_single_csv(const string& symbol, const string& filepath) {
+    ifstream file(filepath);
+    if (!file.is_open()) {
+        throw runtime_error("Could not open CSV file: " + filepath);
+    }
+
+    string line;
+    // Skip header
+    getline(file, line);
+
+    vector<Bar> bars_for_symbol;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string item;
+        
+        Bar bar;
+        bar.symbol = symbol;
+
+        // 1. Timestamp
+        getline(ss, bar.timestamp, ',');
+
+        // 2. Open, High, Low, Close, Volume
+        getline(ss, item, ','); bar.open = stod(item);
+        getline(ss, item, ','); bar.high = stod(item);
+        getline(ss, item, ','); bar.low = stod(item);
+        getline(ss, item, ','); bar.close = stod(item);
+        getline(ss, item, ','); bar.volume = stoll(item);
+
+        bars_for_symbol.push_back(bar);
+    }
+    all_bars[symbol] = bars_for_symbol;
+    cout << "Loaded " << bars_for_symbol.size() << " bars for symbol " << symbol << endl;
 }
 
 
@@ -116,3 +157,74 @@ void HistoricCSVDataHandler::updateBars(queue<shared_ptr<Event>>& event_queue) {
         current_bar_iterators.at(next_symbol_to_process)++;
     }
 }
+
+
+#include "../../include/data/HistoricCSVDataHandler.h"
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <iomanip>
+
+// ... constructor remains the same ...
+
+// STAGE 2: Optimized CSV parsing to avoid stringstream overhead.
+// This parser assumes a strict format of: Timestamp,Open,High,Low,Close,Volume
+void HistoricCSVDataHandler::parse_single_csv(const std::string& symbol, const std::string& filepath) {
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open CSV file: " + filepath);
+    }
+
+    std::string line;
+    std::getline(file, line); // Skip header
+
+    std::vector<Bar> bars_for_symbol;
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+
+        Bar bar;
+        bar.symbol = symbol;
+        size_t start = 0;
+        size_t end = line.find(',');
+
+        // 1. Timestamp
+        bar.timestamp = line.substr(start, end - start);
+        start = end + 1;
+
+        // 2. Open
+        end = line.find(',', start);
+        bar.open = std::stod(line.substr(start, end - start));
+        start = end + 1;
+
+        // 3. High
+        end = line.find(',', start);
+        bar.high = std::stod(line.substr(start, end - start));
+        start = end + 1;
+
+        // 4. Low
+        end = line.find(',', start);
+        bar.low = std::stod(line.substr(start, end - start));
+        start = end + 1;
+
+        // 5. Close
+        end = line.find(',', start);
+        bar.close = std::stod(line.substr(start, end - start));
+        start = end + 1;
+
+        // 6. Volume
+        bar.volume = std::stoll(line.substr(start));
+
+        bars_for_symbol.push_back(bar);
+    }
+    all_bars[symbol] = bars_for_symbol;
+    std::cout << "Loaded " << bars_for_symbol.size() << " bars for symbol " << symbol << std::endl;
+}
+
+void HistoricCSVDataHandler::parse_all_csvs(const std::map<std::string, std::string>& csv_filepaths) {
+    for (const auto& pair : csv_filepaths) {
+        parse_single_csv(pair.first, pair.second);
+    }
+}
+
+
+// ... interface implementations (isFinished, updateBars, etc.) remain the same ...

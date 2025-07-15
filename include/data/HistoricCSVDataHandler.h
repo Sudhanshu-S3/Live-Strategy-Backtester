@@ -6,6 +6,7 @@
 #include <map>
 #include "DataHandler.h"
 #include "DataTypes.h"
+#include <optional> // For std::optional
 
 // HistoricCSVDataHandler loads data for multiple symbols from CSV files
 // and feeds them to the backtester in chronological order.
@@ -13,6 +14,8 @@ class HistoricCSVDataHandler : public DataHandler {
 public:
     // Constructor now takes a map of {symbol -> filepath}.
     HistoricCSVDataHandler(const std::map<std::string, std::string>& csv_filepaths);
+    // Overload for single file (e.g., benchmark)
+    HistoricCSVDataHandler(const std::string& symbol, const std::string& filepath);
 
     // Override the new interface methods.
     void updateBars(std::queue<std::shared_ptr<Event>>& event_queue) override;
@@ -32,6 +35,7 @@ private:
 
     // Called by the constructor to load and parse all specified CSV files.
     void parse_all_csvs(const std::map<std::string, std::string>& csv_filepaths);
+    void parse_single_csv(const std::string& symbol, const std::string& filepath);
 };
 
 #endif

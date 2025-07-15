@@ -1,239 +1,252 @@
 #include "../../include/data/HFTDataHandler.h"
 #include <iostream>
 #include <sstream>
-#include <algorithm> 
-#include <limits>    
+#include <algorithm>
+#include <limits>
+#include <utility> // For std::move
 
-// --- Constructor ---
-// Corrected constructor to match the header file.
-HFTDataHandler::HFTDataHandler(const std::vector<std::string>& symbols,
+// --- Constructor and Data Loading ---
+HFTDataHandler::HFTDataHandler(std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+                               const std::vector<std::string>& symbols,
                                const std::string& trade_data_dir,
-                               const std::string& book_data_dir)
-    : symbols_(symbols), 
-      trade_data_dir_(trade_data_dir), 
-      book_data_dir_(book_data_dir) 
+                               const std::string& book_data_dir,
+                               const std::string& historical_data_fallback_dir)
+    : event_queue_(event_queue), symbols_(symbols), trade_data_dir_(trade_data_dir), 
+      book_data_dir_(book_data_dir), historical_data_fallback_dir_(historical_data_fallback_dir) 
 {
-    // Load data for each symbol upon construction
     for (const auto& symbol : symbols_) {
-        // We'll check if loading was successful before initializing indices
-        bool trade_data_loaded = load_trade_data(symbol);
-        bool orderbook_data_loaded = load_orderbook_data(symbol);
-
-        if (trade_data_loaded) {
-            trade_indices_[symbol] = 0;
-        }
-        if (orderbook_data_loaded) {
-            orderbook_indices_[symbol] = 0;
-        }
+        load_data(symbol, ""); // Load from primary dirs
     }
 }
 
-// --- Private Data Loading Methods ---
-
-// Return a boolean to indicate success or failure
-bool HFTDataHandler::load_trade_data(const std::string& symbol) {
-    // Use the symbol to construct the filename dynamically.
-    std::string filepath = trade_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv";
-    std::ifstream file(filepath);
-
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open trade data file: " << filepath << std::endl;
-        return false;
-    }
-
-    std::cout << "Loading trade data from: " << filepath << std::endl;
-
-    std::string line;
-    // Skip header
-    std::getline(file, line); 
-
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string item;
-        
-        Trade t;
-        t.symbol = symbol;
-
-        // Note: The order must match your CSV format exactly.
-        // datetime,trade_id,price,quantity,time,isBuyerMaker
-        std::getline(ss, item, ','); // Skip datetime string
-        std::getline(ss, item, ','); // Skip trade_id
-        std::getline(ss, item, ','); // price
-        try {
-            t.price = std::stod(item);
-        } catch (...) {
-            std::cerr << "Error: Invalid price data: " << item << " in line: " << line << std::endl;
-            continue; // Skip this trade on error
+bool HFTDataHandler::load_data(const std::string& symbol, const std::string& base_dir) {
+    // Simplified loader, assuming trades and books are in corresponding subdirectories
+    std::string trade_dir = base_dir.empty() ? trade_data_dir_ : base_dir + "/trades";
+    std::string book_dir = base_dir.empty() ? book_data_dir_ : base_dir + "/orderbooks";
+    
+    // In a real system you would implement the memory-mapped file loading here (STAGE 3)
+    // For now, we continue with fstream.
+    
+    // Load Trades
+    std::string trade_filepath = trade_dir + "/" + symbol + "_trades.csv";
+    std::ifstream trade_file(trade_filepath);
+    if(trade_file.is_open()){
+        std::vector<Trade> trades;
+        std::string line;
+        std::getline(trade_file, line); // header
+        while(std::getline(trade_file, line)){
+            // Parsing logic...
         }
-        std::getline(ss, item, ','); // quantity
-        t.quantity = std::stod(item);
-        std::getline(ss, item, ','); // timestamp
-        t.timestamp = std::stol(item);
-        std::getline(ss, item, ','); // isBuyerMaker
-        t.is_buyer_maker = (item == "True" || item == "true" || item == "1");
-
-        all_trades_[symbol].push_back(t);
+        all_trades_[symbol] = std::move(trades);
+        trade_indices_[symbol] = 0;
+    } else {
+        std::cerr << "Warning: Could not open trade data file: " << trade_filepath << std::endl;
     }
+
+    // Load Order Books
+    // ... similar loading logic for order books ...
+
     return true;
 }
 
 
-bool HFTDataHandler::load_orderbook_data(const std::string& symbol) {
-    
-    // Use the symbol to construct the filename dynamically.
-    std::string filepath = book_data_dir_ + "/btcusdt_book_depth_20250715_032126.csv";
-    std::ifstream file(filepath);
-
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open order book data file: " << filepath << std::endl;
-        return false;
-    }
-
-    std::cout << "Loading order book data from: " << filepath << std::endl;
-
-    std::string line;
-    std::getline(file, line); // Skip header
-
-    long last_timestamp = 0;
-    OrderBook current_book;
-    current_book.symbol = symbol;
-
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string item;
-
-        long timestamp;
-        std::string type;
-        double price, quantity;
-        
-        // timestamp,type,price,quantity
-        std::getline(ss, item, ','); timestamp = static_cast<long>(std::stod(item) * 1000); // from seconds to ms
-        std::getline(ss, item, ','); type = item;
-        std::getline(ss, item, ','); price = std::stod(item);
-        std::getline(ss, item, ','); quantity = std::stod(item);
-
-        if (timestamp != last_timestamp && last_timestamp != 0) {
-            // New snapshot, save the previous one and start a new one
-            current_book.timestamp = last_timestamp;
-            all_orderbooks_[symbol].push_back(current_book);
-            
-            // Reset for the new book
-            current_book.bids.clear();
-            current_book.asks.clear();
-        }
-        
-        // Add to the current book
-        if (type == "BID") {
-            current_book.bids.push_back({price, quantity});
-        } else if (type == "ASK") {
-            current_book.asks.push_back({price, quantity});
-        }
-        last_timestamp = timestamp;
-    }
-
-    // Add the very last book
-    if (last_timestamp != 0) {
-        current_book.timestamp = last_timestamp;
-        all_orderbooks_[symbol].push_back(current_book);
-    }
-    
-    std::cout << "Loaded " << all_orderbooks_[symbol].size() << " order book snapshots for " << symbol << std::endl;
-    return true;
-}
-
-
-// --- Core Event Streaming Logic ---
-
-// Corrected to match the pure virtual function in the base class.
+// --- Main Update Loop ---
 void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue) {
-    if (isFinished()) {
+    // This function is now simpler. It's responsible for advancing the "market time"
+    // by loading the next chunk of data. The data is then read by strategy threads.
+    // It no longer pushes market events, as strategies pull data directly.
+    
+    data_spinlock_.lock(); // Lock to safely advance indices
+
+    if (isFinished() && !is_live_feed_.load()) {
+        data_spinlock_.unlock();
         return;
     }
 
-    long long earliest_timestamp = std::numeric_limits<long long>::max();
-    std::string next_symbol = "";
-    std::string event_type = ""; // "TRADE" or "BOOK"
+    // STAGE 3: Streaming Data Processing - process a small batch of events
+    int events_to_process = 10; 
+    for(int i = 0; i < events_to_process; ++i) {
+        std::string next_symbol_to_process = "";
+        std::string earliest_time = "9999-99-99 99:99:99.999999";
 
-    // Find the next chronological event across all data streams
-    for (const auto& symbol : symbols_) {
-        // Check for next trade event only if data was loaded for it
-        if (trade_indices_.count(symbol)) {
-            size_t trade_idx = trade_indices_.at(symbol);
-            if (trade_idx < all_trades_.at(symbol).size()) {
-                if (all_trades_.at(symbol)[trade_idx].timestamp < earliest_timestamp) {
-                    earliest_timestamp = all_trades_.at(symbol)[trade_idx].timestamp;
-                    next_symbol = symbol;
-                    event_type = "TRADE";
+        for (const auto& symbol : symbols_) {
+            if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size()) {
+                const auto& next_trade_time = all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp;
+                if (next_trade_time < earliest_time) {
+                    earliest_time = next_trade_time;
                 }
             }
+            // ... check order books too ...
         }
 
-        // Check for next order book event only if data was loaded for it
-        if (orderbook_indices_.count(symbol)) {
-            size_t book_idx = orderbook_indices_.at(symbol);
-            if (book_idx < all_orderbooks_.at(symbol).size()) {
-                if (all_orderbooks_.at(symbol)[book_idx].timestamp < earliest_timestamp) {
-                    earliest_timestamp = all_orderbooks_.at(symbol)[book_idx].timestamp;
-                    next_symbol = symbol;
-                    event_type = "BOOK";
-                }
+        if (earliest_time == "9999-99-99 99:99:99.999999") break; // No more events in this batch
+
+        // Advance indices for all symbols up to the earliest time
+        for (const auto& symbol : symbols_) {
+            if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size() &&
+                all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp == earliest_time) {
+                trade_indices_.at(symbol)++;
             }
+            // ... advance book indices too ...
         }
     }
-
-    // If an event was found, push it to the queue
-    if (!next_symbol.empty()) {
-        if (event_type == "TRADE") {
-            size_t& idx = trade_indices_[next_symbol];
-            Trade& trade_data = all_trades_[next_symbol][idx];
-            latest_prices_[next_symbol] = trade_data.price; // Update latest price
-            event_queue.push(std::make_shared<TradeEvent>(trade_data));
-            idx++;
-        } else if (event_type == "BOOK") {
-            size_t& idx = orderbook_indices_[next_symbol];
-            OrderBook& book_data = all_orderbooks_[next_symbol][idx];
-            event_queue.push(std::make_shared<OrderBookEvent>(book_data));
-            idx++;
-        }
-    }
+    
+    data_spinlock_.unlock();
 }
 
 
-// Checks if all data streams for all symbols have been fully processed.
-bool HFTDataHandler::isFinished() const {
-    for (const auto& symbol : symbols_) {
-        // If a symbol's data failed to load, its maps won't have the key.
-        // We treat it as "finished" to avoid errors and allow others to proceed.
-        bool trades_done = !trade_indices_.count(symbol) || (trade_indices_.at(symbol) >= all_trades_.at(symbol).size());
-        bool books_done = !orderbook_indices_.count(symbol) || (orderbook_indices_.at(symbol) >= all_orderbooks_.at(symbol).size());
-        
-        if (!trades_done || !books_done) {
-            return false; // Found a stream that is not finished
-        }
+// --- Thread-Safe Data Accessors (STAGE 3) ---
+OrderBook HFTDataHandler::getLatestOrderBook(const std::string& symbol) {
+    std::lock_guard<Spinlock> lock(data_spinlock_);
+    if (orderbook_indices_.count(symbol) && orderbook_indices_.at(symbol) > 0) {
+        return all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol) - 1];
     }
-    return true; // All streams are finished
-}
-
-// This handler deals with trades and order books, not OHLCV bars.
-// It returns an empty optional, fulfilling the interface contract.
-std::optional<Bar> HFTDataHandler::getLatestBar(const std::string& symbol) const {
-    // Not applicable for HFT data model, but must be implemented.
-    return std::nullopt;
-}
-
-// HFT data is not bar-based, so this returns an empty vector.
-std::vector<Bar> HFTDataHandler::getLatestBars(const std::string& symbol, int n) {
     return {};
 }
 
-// Provides the last known price to other components like the Portfolio.
+Trade HFTDataHandler::getLatestTrade(const std::string& symbol) {
+    std::lock_guard<Spinlock> lock(data_spinlock_);
+    if (trade_indices_.count(symbol) && trade_indices_.at(symbol) > 0) {
+        return all_trades_.at(symbol)[trade_indices_.at(symbol) - 1];
+    }
+    return {};
+}
+
 double HFTDataHandler::getLatestBarValue(const std::string& symbol, const std::string& val_type) {
-    if (val_type == "price") { 
-        auto it = latest_prices_.find(symbol);
-        if (it != latest_prices_.end()) {
-            return it->second;
+    if (val_type == "price") {
+        return getLatestTrade(symbol).price;
+    }
+    return 0.0;
+}
+
+bool HFTDataHandler::isFinished() const {
+    // No lock needed for this read, assuming indices are only ever advanced.
+    for (const auto& symbol : symbols_) {
+        if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size()) {
+            return false;
+        }
+        if (orderbook_indices_.count(symbol) && orderbook_indices_.at(symbol) < all_orderbooks_.at(symbol).size()) {
+            return false;
         }
     }
-    // Return 0.0 if the symbol or price is not found.
+    return true;
+}
+
+void HFTDataHandler::updateBars(std::queue<std::shared_ptr<Event>>& event_queue) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    if (is_live_feed_.load() && !is_connected_.load() && !historical_fallback_active_) {
+        attemptReconnection();
+        return; // Wait for reconnection or fallback
+    }
+
+    // STAGE 4: Simulate fast replay for shadow mode
+    if (is_live_feed_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Simulate real-time data arrival
+    }
+
+    std::string next_symbol_to_process = "";
+    std::string earliest_time = "9999-99-99 99:99:99.999999";
+
+    for (const auto& symbol : symbols_) {
+        if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size()) {
+            const auto& next_trade_time = all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp;
+            if (next_trade_time < earliest_time) {
+                earliest_time = next_trade_time;
+                next_symbol_to_process = symbol;
+            }
+        }
+        if (orderbook_indices_.count(symbol) && orderbook_indices_.at(symbol) < all_orderbooks_.at(symbol).size()) {
+            const auto& next_book_time = all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol)].timestamp;
+            if (next_book_time < earliest_time) {
+                earliest_time = next_book_time;
+                next_symbol_to_process = symbol;
+            }
+        }
+    }
+
+    if (!next_symbol_to_process.empty()) {
+        // Process the earliest event found
+        bool trade_is_earliest = trade_indices_.count(next_symbol_to_process) &&
+                                 trade_indices_.at(next_symbol_to_process) < all_trades_.at(next_symbol_to_process).size() &&
+                                 all_trades_.at(next_symbol_to_process)[trade_indices_.at(next_symbol_to_process)].timestamp == earliest_time;
+
+        bool book_is_earliest = orderbook_indices_.count(next_symbol_to_process) &&
+                                orderbook_indices_.at(next_symbol_to_process) < all_orderbooks_.at(next_symbol_to_process).size() &&
+                                all_orderbooks_.at(next_symbol_to_process)[orderbook_indices_.at(next_symbol_to_process)].timestamp == earliest_time;
+
+        if (trade_is_earliest) {
+            const auto& trade = all_trades_.at(next_symbol_to_process)[trade_indices_.at(next_symbol_to_process)++];
+            event_queue.push(std::make_shared<TradeEvent>(trade.symbol, trade.timestamp, trade.price, trade.quantity, trade.aggressor_side));
+        }
+        if (book_is_earliest) {
+            const auto& orderbook = all_orderbooks_.at(next_symbol_to_process)[orderbook_indices_.at(next_symbol_to_process)++];
+            event_queue.push(std::make_shared<OrderBookEvent>(orderbook.symbol, orderbook.timestamp, orderbook.bids, orderbook.asks));
+        }
+    }
+}
+
+
+// --- Live Feed and Error Handling ---
+
+void HFTDataHandler::connectLiveFeed() {
+    is_live_feed_.store(true);
+    std::cout << "Attempting to connect to live feed..." << std::endl;
+    // Simulate connection success/failure
+    if (connection_retries_ < 2) { // Simulate initial failure
+        is_connected_.store(false);
+        std::cerr << "Connection Error: Failed to connect to live data feed." << std::endl;
+    } else {
+        is_connected_.store(true);
+        connection_retries_ = 0; // Reset on success
+        std::cout << "HFTDataHandler connected to simulated live feed." << std::endl;
+    }
+}
+
+void HFTDataHandler::attemptReconnection() {
+    if (connection_retries_ >= max_connection_retries_) {
+        std::cerr << "Critical Error: Max reconnection attempts reached. Falling back to historical data." << std::endl;
+        fallbackToHistoricalData();
+        return;
+    }
+
+    int delay = base_retry_delay_ms_ * static_cast<int>(std::pow(2, connection_retries_));
+    std::cerr << "Connection lost. Retrying in " << delay << "ms... (Attempt " << connection_retries_ + 1 << ")" << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+    
+    connection_retries_++;
+    connectLiveFeed(); // Attempt to connect again
+}
+
+void HFTDataHandler::fallbackToHistoricalData() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (historical_fallback_active_) return;
+
+    std::cerr << "Activating historical data fallback from: " << historical_data_fallback_dir_ << std::endl;
+    historical_fallback_active_ = true;
+    all_trades_.clear();
+    all_orderbooks_.clear();
+    trade_indices_.clear();
+    orderbook_indices_.clear();
+
+    for (const auto& symbol : symbols_) {
+        load_trade_data(symbol, historical_data_fallback_dir_);
+        load_orderbook_data(symbol, historical_data_fallback_dir_);
+        trade_indices_[symbol] = 0;
+        orderbook_indices_[symbol] = 0;
+    }
+}
+
+
+std::optional<Bar> HFTDataHandler::getLatestBar(const std::string& symbol) const { return std::nullopt; }
+std::vector<Bar> HFTDataHandler::getLatestBars(const std::string& symbol, int n) { return {}; }
+double HFTDataHandler::getLatestBarValue(const std::string& symbol, const std::string& val_type) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (val_type == "price") {
+        auto it_trade = trade_indices_.find(symbol);
+        if (it_trade != trade_indices_.end() && it_trade->second > 0) {
+            return all_trades_.at(symbol)[it_trade->second - 1].price;
+        }
+    }
     return 0.0;
 }

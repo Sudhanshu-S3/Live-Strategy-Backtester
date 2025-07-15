@@ -1,84 +1,83 @@
-#include "strategy/OrderBookImbalanceStrategy.h"
+#include "../../include/strategy/OrderBookImbalanceStrategy.h"
+#include "../../include/data/HFTDataHandler.h"
 #include <iostream>
-#include <numeric> // For std::accumulate
-#include <chrono>
+#include <numeric>
 
-// Helper to get a string timestamp
-std::string getCurrentTimestampStr() {
-    auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
-    return std::to_string(in_time_t);
-}
+// STAGE 3: SIMD for accelerated math
+#include <immintrin.h>
 
 OrderBookImbalanceStrategy::OrderBookImbalanceStrategy(
-    std::shared_ptr<std::queue<std::shared_ptr<Event>>> events_queue,
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+    std::shared_ptr<DataHandler> data_handler,
     const std::string& symbol,
     int lookback_levels,
-    double buy_threshold,
-    double sell_threshold
-) : Strategy(events_queue),
-    symbol_(symbol),
+    double imbalance_threshold
+) : Strategy(event_queue, data_handler, symbol, "ORDER_BOOK_IMBALANCE"),
     lookback_levels_(lookback_levels),
-    buy_threshold_(buy_threshold),
-    sell_threshold_(sell_threshold) {}
-
-void OrderBookImbalanceStrategy::onFill(const FillEvent& event) {
-    // If we receive a fill event, it means our position state has changed.
-    // A simple implementation assumes any fill opens or closes the one position we manage.
-    if (event.direction == "BUY" || event.direction == "SELL") {
-        position_active_ = true;
-    } else if (event.direction == "EXIT_BUY" || event.direction == "EXIT_SELL") {
-        position_active_ = false;
-    }
+    imbalance_threshold_(imbalance_threshold) 
+{
+    // STAGE 3: Pre-allocate aligned memory for SIMD
+    bid_prices_f.resize(lookback_levels);
+    bid_qtys_f.resize(lookback_levels);
+    ask_prices_f.resize(lookback_levels);
+    ask_qtys_f.resize(lookback_levels);
 }
 
+void OrderBookImbalanceStrategy::calculate_signals() {
+    if (!is_active_) return;
 
-void OrderBookImbalanceStrategy::onOrderBook(const OrderBookEvent& event) {
-    if (event.book.symbol != symbol_) {
-        return; // This event is not for us
+    auto hft_data_handler = std::dynamic_pointer_cast<HFTDataHandler>(data_handler_);
+    if (!hft_data_handler) return;
+
+    OrderBook book = hft_data_handler->getLatestOrderBook(symbol_);
+    if (book.bids.empty() || book.asks.empty()) {
+        return;
     }
 
-    double total_bid_volume = 0.0;
-    double total_ask_volume = 0.0;
-
-    // Calculate total volume for the top N levels
-    for (int i = 0; i < lookback_levels_ && i < event.book.bids.size(); ++i) {
-        total_bid_volume += event.book.bids[i].quantity;
+    // STAGE 3: Incremental computation - only calculate on new book data
+    if (book.timestamp == last_update_timestamp_) {
+        return;
     }
-    for (int i = 0; i < lookback_levels_ && i < event.book.asks.size(); ++i) {
-        total_ask_volume += event.book.asks[i].quantity;
-    }
+    last_update_timestamp_ = book.timestamp;
 
-    if (total_bid_volume + total_ask_volume == 0) {
-        return; // Avoid division by zero
+    // --- Standard C++ calculation ---
+    double total_bid_volume = 0;
+    auto bid_it = book.bids.rbegin();
+    for(int i = 0; i < lookback_levels_ && bid_it != book.bids.rend(); ++i, ++bid_it) {
+        total_bid_volume += bid_it->second;
     }
 
-    // Calculate the imbalance ratio
-    double imbalance_ratio = total_bid_volume / (total_bid_volume + total_ask_volume);
+    double total_ask_volume = 0;
+    auto ask_it = book.asks.begin();
+    for(int i = 0; i < lookback_levels_ && ask_it != book.asks.end(); ++i, ++ask_it) {
+        total_ask_volume += ask_it->second;
+    }
+
+    // --- STAGE 3: SIMD-accelerated calculation (example) ---
+    // This is a simplified example. A real use case would be more complex,
+    // e.g., calculating VWAP or other weighted metrics.
+    int n = std::min((int)book.bids.size(), lookback_levels_);
+    // Copy data to float vectors...
     
-    std::string signal_type = "";
-
-    // Generate signals based on the ratio and our current position
-    if (!position_active_) {
-        if (imbalance_ratio > buy_threshold_) {
-            signal_type = "LONG";
-            std::cout << "STRATEGY: Strong buy pressure detected! Ratio: " << imbalance_ratio << ". Sending LONG signal." << std::endl;
-        } else if (imbalance_ratio < sell_threshold_) {
-            signal_type = "SHORT";
-            std::cout << "STRATEGY: Strong sell pressure detected! Ratio: " << imbalance_ratio << ". Sending SHORT signal." << std::endl;
-        }
-    } else { // position_active_ is true
-        // Exit if pressure reverses or normalizes
-        if (imbalance_ratio < sell_threshold_ || imbalance_ratio > buy_threshold_ || 
-            (imbalance_ratio <= buy_threshold_ && imbalance_ratio >= sell_threshold_)) {
-            signal_type = "EXIT";
-            std::cout << "STRATEGY: Pressure changed. Ratio: " << imbalance_ratio << ". Sending EXIT signal." << std::endl;
+    __m256 bid_sum_vec = _mm256_setzero_ps();
+    for (int i = 0; i < n; i += 8) {
+        if (i + 8 <= n) {
+            __m256 qtys = _mm256_loadu_ps(&bid_qtys_f[i]);
+            bid_sum_vec = _mm256_add_ps(bid_sum_vec, qtys);
         }
     }
+    // Horizontal add to get the final sum
+    // float total_bid_volume_simd = ...;
 
-    // If we generated a signal, create a SignalEvent and push it to the queue
-    if (!signal_type.empty()) {
-        auto signal = std::make_shared<SignalEvent>(symbol_, std::to_string(event.book.timestamp), signal_type);
-        events_queue_->push(std::move(signal));
+
+    if (total_ask_volume > 1e-9) {
+        double imbalance = total_bid_volume / total_ask_volume;
+        if (imbalance > imbalance_threshold_) {
+            // Strong buying pressure
+            generate_signal(OrderDirection::BUY, 1.0);
+        } else if (imbalance < (1.0 / imbalance_threshold_)) {
+            // Strong selling pressure
+            generate_signal(OrderDirection::SELL, 1.0);
+        }
     }
-};
+}

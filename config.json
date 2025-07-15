@@ -1,17 +1,51 @@
 {
+  "run_mode": "BACKTEST",
   "initial_capital": 100000.0,
   "symbols": ["BTCUSDT"],
   "data": {
-    "trade_data_dir": "historical_data",
-    "book_data_dir": "historical_data"
+    "trade_data_dir": "historical_data/trades",
+    "book_data_dir": "historical_data/orderbooks",
+    "historical_data_fallback_dir": "historical_data/full"
   },
-  "strategy": {
-    "name": "ORDER_BOOK_IMBALANCE",
-    "symbol": "BTCUSDT",
-    "params": {
-      "lookback_levels": 5,
-      "buy_threshold": 0.7,
-      "sell_threshold": 0.3
+  "strategies": [
+    {
+      "name": "ORDER_BOOK_IMBALANCE",
+      "symbol": "BTCUSDT",
+      "active": true,
+      "params": {
+        "lookback_levels": 15,
+        "imbalance_threshold": 1.7
+      }
+    },
+    {
+      "name": "SIMPLE_MOVING_AVERAGE_CROSSOVER",
+      "symbol": "BTCUSDT",
+      "active": false,
+      "params": {
+        "short_window": 10,
+        "long_window": 30
+      }
     }
+  ],
+  "optimization": {
+    "enabled": false,
+    "strategy_to_optimize": "ORDER_BOOK_IMBALANCE",
+    "metric_to_optimize": "Sharpe Ratio",
+    "param_ranges": {
+      "lookback_levels": [10, 15, 20],
+      "imbalance_threshold": [1.5, 1.7, 2.0]
+    }
+  },
+  "walk_forward": {
+    "enabled": false,
+    "strategy_to_test": "ORDER_BOOK_IMBALANCE",
+    "data_start_date": "2023-01-01",
+    "data_end_date": "2023-08-31",
+    "in_sample_months": 2,
+    "out_of_sample_months": 1
+  },
+  "analytics": {
+    "enable_cross_correlation": true,
+    "anomaly_detection_z_score": 3.0
   }
 }

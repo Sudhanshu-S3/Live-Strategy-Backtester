@@ -1,37 +1,39 @@
 #ifndef STRATEGY_H
 #define STRATEGY_H
 
-#include <queue>
-#include <memory>
-#include "../data/DataTypes.h"
+#include "../event/Event.h"
+#include "../data/DataHandler.h"
+#include "../data/DataTypes.h" // For MarketRegime if passed directly
 
-// The Strategy class is responsible for generating trading signals
-// based on incoming market data.
+#include <memory>
+#include <queue>
+#include <string>
+
+// Forward declarations to avoid circular includes
+class EventQueue;
+class DataHandler; // Assuming DataHandler.h is included where this is used
+
+// Base class for all trading strategies.
 class Strategy {
 public:
-    // Constructor now takes the event queue.
-    Strategy(std::shared_ptr<std::queue<std::shared_ptr<Event>>> events_queue) 
-        : events_queue_(events_queue) {}
+    Strategy(std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+             std::shared_ptr<DataHandler> data_handler);
     virtual ~Strategy() = default;
 
-    // --- Event Handlers for different data types ---
-    // Derived strategies should override the handlers for the events they care about.
+    // --- Event Handlers (pure virtual, must be implemented by derived strategies) ---
+    virtual void onMarket(const MarketEvent& event) = 0;
+    virtual void onTrade(const TradeEvent& event) = 0;
+    virtual void onOrderBook(const OrderBookEvent& event) = 0;
+    virtual void onFill(const FillEvent& event) = 0; // New: Handle fill events in strategy
 
-    // Reacts to a top-of-book or bar update event.
-    virtual void onMarket(const MarketEvent& event) {}
-
-    // Reacts to a new trade in the market.
-    virtual void onTrade(const TradeEvent& event) {}
-
-    // Reacts to a change in the order book.
-    virtual void onOrderBook(const OrderBookEvent& event) {}
-
-    // Reacts to a confirmation that one of its own orders was filled.
-    virtual void onFill(const FillEvent& event) {}
+    // New: Handle market regime changes (optional for derived classes)
+    virtual void onMarketRegime(MarketRegime new_regime) {
+        // Default implementation does nothing. Derived strategies can override.
+    }
 
 protected:
-    // The event queue for the strategy to push SignalEvents to.
-    std::shared_ptr<std::queue<std::shared_ptr<Event>>> events_queue_;
+    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue_;
+    std::shared_ptr<DataHandler> data_handler_;
 };
 
 #endif // STRATEGY_H

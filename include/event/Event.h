@@ -17,12 +17,15 @@ enum class OrderType {
 
 // Base struct for all events
 struct Event {
-    enum EventType {
-        MARKET,
-        SIGNAL,
-        ORDER,
-        FILL
-    };
+    enum class EventType {
+    MARKET,
+    ORDER_BOOK,
+    TRADE,
+    SIGNAL,
+    ORDER,
+    FILL,
+    NEWS // <--- ADDED
+};
     virtual ~Event() = default;
     EventType type;
 };
@@ -53,6 +56,19 @@ struct SignalEvent : public Event {
     }
 };
 
+class NewsEvent : public Event {
+public:
+    std::string symbol;
+    std::string timestamp;
+    std::string headline;
+    double sentiment_score;
+
+    NewsEvent(std::string symbol, std::string timestamp, std::string headline, double sentiment_score)
+        : symbol(std::move(symbol)), timestamp(std::move(timestamp)), 
+          headline(std::move(headline)), sentiment_score(sentiment_score) {
+        type = EventType::NEWS;
+    }
+};
 // Event sent from Portfolio to the ExecutionHandler
 struct OrderEvent : public Event {
     std::string symbol;
