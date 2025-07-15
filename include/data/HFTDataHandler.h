@@ -42,9 +42,11 @@ public:
     std::optional<Bar> getLatestBar(const std::string& symbol) const override;
     double getLatestBarValue(const std::string& symbol, const std::string& val_type) override;
     std::vector<Bar> getLatestBars(const std::string& symbol, int n = 1) override; 
+    std::optional<OrderBook> getLatestOrderBook(const std::string& symbol) const override;
+    const std::vector<std::string>& getSymbols() const override;
 
     // STAGE 3: Accessors for strategies running in other threads
-    OrderBook getLatestOrderBook(const std::string& symbol);
+    OrderBook getLatestOrderBookNonOptional(const std::string& symbol);
     Trade getLatestTrade(const std::string& symbol);
 
     void connectLiveFeed();

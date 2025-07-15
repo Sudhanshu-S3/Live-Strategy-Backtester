@@ -89,5 +89,5 @@ void OrderBookImbalanceStrategy::generate_signal(OrderDirection direction, doubl
     // it could be handled by the RiskManager.
     double stop_loss = 0.0; 
     auto signal = std::make_shared<SignalEvent>(name, symbol, timestamp, direction, stop_loss, strength);
-    event_queue_->push(signal);
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(signal));
 }

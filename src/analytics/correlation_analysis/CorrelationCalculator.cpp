@@ -1,4 +1,4 @@
-#include "analytics/correlation_analysis/CorrelationCalculator.h"
+#include "../../../include/analytics/correlation_analysis/CorrelationCalculator.h"
 #include <dlib/statistics.h>
 
 namespace correlation_analysis {

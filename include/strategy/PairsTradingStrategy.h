@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <stdexcept>
 
 class PairsTradingStrategy : public Strategy {
 public:
@@ -16,7 +17,7 @@ public:
         int lookback,
         double entry_threshold_z,
         double exit_threshold_z
-    ) : Strategy(event_queue, data_handler, "PAIRS_TRADING_" + symbols[0] + "_" + symbols[1]),
+    ) : Strategy(event_queue, data_handler, "PAIRS_TRADING_" + symbols[0] + "_" + symbols[1], symbols[0] + "_" + symbols[1]),
         lookback_(lookback),
         entry_threshold_z_(entry_threshold_z),
         exit_threshold_z_(exit_threshold_z) {
@@ -27,7 +28,11 @@ public:
         symbol2_ = symbols[1];
     }
 
+    // Implement pure virtual functions from base class
+    void onMarket(const MarketEvent& event) override;
     void onTrade(const TradeEvent& event) override;
+    void onOrderBook(const OrderBookEvent& event) override;
+    void onFill(const FillEvent& event) override;
 
 private:
     void calculate_spread();

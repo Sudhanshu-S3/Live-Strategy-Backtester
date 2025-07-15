@@ -41,7 +41,7 @@ void MarketRegimeDetector::onMarket(const MarketEvent& event) {
                   << ": Volatility=" << static_cast<int>(current_state_.volatility) 
                   << ", Trend=" << static_cast<int>(current_state_.trend) << std::endl;
         auto regime_event = std::make_shared<MarketRegimeChangedEvent>(current_state_);
-        event_queue_->push(regime_event);
+        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(regime_event));
     }
 }
 

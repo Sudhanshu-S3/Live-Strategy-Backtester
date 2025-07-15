@@ -16,7 +16,7 @@ PairTradingStrategy::PairTradingStrategy(
     symbol_b_(symbol_b),
     window_(window),
     z_score_threshold_(z_score_threshold),
-    current_position_(PositionState::NONE)
+    current_position_(PositionState::FLAT)
 {
     latest_prices_[symbol_a_] = 0.0;
     latest_prices_[symbol_b_] = 0.0;
@@ -66,9 +66,16 @@ void PairTradingStrategy::onMarket(const MarketEvent& event) {
         generate_signal(symbol_b_, OrderDirection::SELL);
         current_position_ = PositionState::LONG_PAIR;
     } else if (std::abs(z_score) < 0.5 && current_position_ != PositionState::FLAT) {
-        // Exit position
-        generate_signal(symbol_a_, OrderDirection::NONE); // Assuming NONE direction signals exit
-        generate_signal(symbol_b_, OrderDirection::NONE);
+        // Exit position (mean reversion)
+        if (current_position_ == PositionState::LONG_PAIR) {
+            // We were long A and short B, so sell A and buy B to close.
+            generate_signal(symbol_a_, OrderDirection::SELL);
+            generate_signal(symbol_b_, OrderDirection::BUY);
+        } else if (current_position_ == PositionState::SHORT_PAIR) {
+            // We were short A and long B, so buy A and sell B to close.
+            generate_signal(symbol_a_, OrderDirection::BUY);
+            generate_signal(symbol_b_, OrderDirection::SELL);
+        }
         current_position_ = PositionState::FLAT;
     }
 }
@@ -89,5 +96,5 @@ void PairTradingStrategy::onMarketRegimeChanged(const MarketRegimeChangedEvent& 
 void PairTradingStrategy::generate_signal(const std::string& signal_symbol, OrderDirection direction) {
     long long timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     auto signal = std::make_shared<SignalEvent>(name, signal_symbol, timestamp, direction, 0.0, 1.0);
-    event_queue_->push(signal);
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(signal));
 }

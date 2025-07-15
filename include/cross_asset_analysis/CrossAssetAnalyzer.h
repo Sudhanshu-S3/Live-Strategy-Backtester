@@ -22,6 +22,6 @@ private:
     matrix_type correlation_matrix_;
 };
 
-} // namespace cross_asset_analysis
+}
 
 #endif // CROSS_ASSET_ANALYZER_H

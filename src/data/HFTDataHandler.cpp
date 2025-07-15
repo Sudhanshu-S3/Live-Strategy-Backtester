@@ -1,4 +1,5 @@
 #include "../../include/data/HFTDataHandler.h"
+#include "../../include/event/Event.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -47,48 +48,52 @@ HFTDataHandler::HFTDataHandler(
 }
 
 void HFTDataHandler::updateBars() {
-    std::lock_guard<Spinlock> lock(data_spinlock_);
-    
-    long long earliest_trade_time = std::numeric_limits<long long>::max();
-    std::string trade_symbol = "";
-    for (const auto& symbol : symbols_) {
-        if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size()) {
-            if (all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp < earliest_trade_time) {
-                earliest_trade_time = all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp;
-                trade_symbol = symbol;
+    std::shared_ptr<Event> event_to_push;
+    {
+        std::lock_guard<Spinlock> lock(data_spinlock_);
+        
+        long long earliest_trade_time = std::numeric_limits<long long>::max();
+        std::string trade_symbol = "";
+        for (const auto& symbol : symbols_) {
+            if (trade_indices_.count(symbol) && trade_indices_.at(symbol) < all_trades_.at(symbol).size()) {
+                if (all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp < earliest_trade_time) {
+                    earliest_trade_time = all_trades_.at(symbol)[trade_indices_.at(symbol)].timestamp;
+                    trade_symbol = symbol;
+                }
             }
         }
-    }
 
-    long long earliest_book_time = std::numeric_limits<long long>::max();
-    std::string book_symbol = "";
-    for (const auto& symbol : symbols_) {
-        if (orderbook_indices_.count(symbol) && orderbook_indices_.at(symbol) < all_orderbooks_.at(symbol).size()) {
-            if (all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol)].timestamp < earliest_book_time) {
-                earliest_book_time = all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol)].timestamp;
-                book_symbol = symbol;
+        long long earliest_book_time = std::numeric_limits<long long>::max();
+        std::string book_symbol = "";
+        for (const auto& symbol : symbols_) {
+            if (orderbook_indices_.count(symbol) && orderbook_indices_.at(symbol) < all_orderbooks_.at(symbol).size()) {
+                if (all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol)].timestamp < earliest_book_time) {
+                    earliest_book_time = all_orderbooks_.at(symbol)[orderbook_indices_.at(symbol)].timestamp;
+                    book_symbol = symbol;
+                }
             }
         }
-    }
 
-    if (trade_symbol.empty() && book_symbol.empty()) {
-        return; // No more data
-    }
+        if (trade_symbol.empty() && book_symbol.empty()) {
+            return; // No more data
+        }
 
-    auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 
-    if (earliest_trade_time < earliest_book_time) {
-        const auto& trade = all_trades_.at(trade_symbol)[trade_indices_.at(trade_symbol)++];
-        auto event = std::make_shared<TradeEvent>(trade.symbol, trade.timestamp, trade.price, trade.quantity, trade.aggressor_side);
-        event->timestamp_received = now;
-        event_queue_->push(event);
-    } else {
-        const auto& book = all_orderbooks_.at(book_symbol)[orderbook_indices_.at(book_symbol)++];
-        latest_orderbooks_[book.symbol] = book; // Store the latest book
-        auto event = std::make_shared<OrderBookEvent>(book);
-        event->timestamp_received = now;
-        event_queue_->push(event);
+        if (earliest_trade_time < earliest_book_time) {
+            const auto& trade = all_trades_.at(trade_symbol)[trade_indices_.at(trade_symbol)++];
+            auto event = std::make_shared<TradeEvent>(trade.symbol, trade.timestamp, trade.price, trade.quantity, trade.aggressor_side);
+            event->timestamp_received = now;
+            event_to_push = event;
+        } else {
+            const auto& book = all_orderbooks_.at(book_symbol)[orderbook_indices_.at(book_symbol)++];
+            latest_orderbooks_[book.symbol] = book; // Store the latest book
+            auto event = std::make_shared<OrderBookEvent>(book);
+            event->timestamp_received = now;
+            event_to_push = event;
+        }
     }
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(event_to_push));
     notifyNewData();
 }
 
@@ -131,26 +136,26 @@ void HFTDataHandler::connectLiveFeed() {
     // assume the connection is successful.
     is_connected_ = true;
     std::cout << "HFT DataHandler: Live feed connected." << std::endl;
-    event_queue_->push(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::CONNECTED, "Live feed connected."));
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::CONNECTED, "Live feed connected.")));
 }
 
 void HFTDataHandler::attemptReconnection() {
     if (is_connected_) return;
 
     std::cout << "HFT DataHandler: Connection lost. Attempting to reconnect..." << std::endl;
-    event_queue_->push(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::DISCONNECTED, "Live feed connection lost."));
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::DISCONNECTED, "Live feed connection lost.")));
 
     for (int i = 0; i < max_connection_retries_; ++i) {
         connection_retries_++;
         std::cout << "  Reconnection attempt " << connection_retries_ << "..." << std::endl;
-        event_queue_->push(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::RECONNECTING, 
-            "Reconnection attempt " + std::to_string(connection_retries_)));
+        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::RECONNECTING, 
+            "Reconnection attempt " + std::to_string(connection_retries_))));
         
         // Simulate connection attempt
         if (connection_retries_ > 2) { // Simulate success on 3rd try
             is_connected_ = true;
             std::cout << "  Reconnection successful." << std::endl;
-            event_queue_->push(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::CONNECTED, "Reconnection successful."));
+            event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::CONNECTED, "Reconnection successful.")));
             connection_retries_ = 0;
             return;
         }
@@ -167,7 +172,7 @@ void HFTDataHandler::fallbackToHistoricalData() {
     is_live_feed_ = false;
     is_connected_ = false;
     historical_fallback_active_ = true;
-    event_queue_->push(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::FALLBACK_ACTIVE, "Fell back to historical data."));
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::make_shared<DataSourceStatusEvent>(DataSourceStatus::FALLBACK_ACTIVE, "Fell back to historical data.")));
     // The historical data should have already been loaded by the constructor.
     // If not, we could load it here.
 }
@@ -210,13 +215,13 @@ bool HFTDataHandler::load_data(const std::string& symbol, const std::string& dir
     return true;
 }
 
+
 void HFTDataHandler::notifyNewData() {
-    if (on_new_data_) {
-        on_new_data_();
-    }
+    data_notification_cond_.notify_all();
 }
 
 std::optional<OrderBook> HFTDataHandler::getLatestOrderBook(const std::string& symbol) const {
+    std::lock_guard<Spinlock> lock(data_spinlock_);
     auto it = latest_orderbooks_.find(symbol);
     if (it != latest_orderbooks_.end()) {
         return it->second;
@@ -224,4 +229,5 @@ std::optional<OrderBook> HFTDataHandler::getLatestOrderBook(const std::string& s
     return std::nullopt;
 }
 
-// ... other methods ...
+
+

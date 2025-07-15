@@ -2,7 +2,7 @@
 
 namespace multi_asset {
 
-void MultiAssetBacktester::add_backtester(const std::string& asset_id, Backtester backtester) {
+void MultiAssetBacktester::add_backtester(const std::string& asset_id, std::shared_ptr<Backtester> backtester) {
     backtesters_[asset_id] = backtester;
 }
 

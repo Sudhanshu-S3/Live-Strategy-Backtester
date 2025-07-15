@@ -4,7 +4,7 @@ namespace market_microstructure {
 
 void OrderBookSimulator::add_order(const Order& order) {
     // Simplified logic for adding an order
-    if (order.side == "BUY") {
+    if (order.side == OrderSide::BUY) {
         bids_[order.price] += order.quantity;
     } else {
         asks_[order.price] += order.quantity;

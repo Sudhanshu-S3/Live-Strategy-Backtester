@@ -143,7 +143,7 @@ void Portfolio::generateReport() {
         return;
     }
 
-    Performance perf(equity_values, initial_capital_);
+    Performance perf(equity_values, initial_capital_, trade_log_);
     std::cout << "Total Return: " << perf.getTotalReturn() * 100.0 << "%" << std::endl;
     std::cout << "Max Drawdown: " << perf.getMaxDrawdown() * 100.0 << "%" << std::endl;
     std::cout << "Sharpe Ratio: " << perf.getSharpeRatio() << std::endl;
@@ -181,7 +181,6 @@ void Portfolio::writeTradeLogToCSV(const std::string& filename) {
 }
 
 double Portfolio::get_total_equity() const { return total_equity_; }
-double Portfolio::getInitialCapital() const { return initial_capital_; }
 
 const std::vector<std::tuple<long long, double, MarketState>>& Portfolio::getEquityCurve() const {
     return equity_curve_;
@@ -218,7 +217,7 @@ Performance Portfolio::getRealTimePerformance() const {
     for (const auto& p : equity_curve_) {
         equity_values.push_back(std::get<1>(p));
     }
-    return Performance(equity_values, initial_capital_);
+    return Performance(equity_values, initial_capital_, trade_log_);
 }
 
 void Portfolio::generateTradeLevelReport() const {

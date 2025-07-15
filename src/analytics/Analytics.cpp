@@ -8,6 +8,15 @@
 #include <windows.h>
 #include <psapi.h>
 
+// Helper function to convert VolatilityLevel enum to string
+std::string volatilityLevelToString(VolatilityLevel level) {
+    switch (level) {
+        case VolatilityLevel::LOW: return "LOW";
+        case VolatilityLevel::HIGH: return "HIGH";
+        default: return "UNKNOWN";
+    }
+}
+
 // Helper function for correlation calculation
 double calculate_mean(const std::vector<double>& v) {
     if (v.empty()) return 0.0;
@@ -126,11 +135,11 @@ void Analytics::comparePerformance(std::shared_ptr<Portfolio> live_portfolio, st
     }
 
     // --- Create Performance objects ---
-    auto get_equity_values = [](const std::vector<std::pair<long long, double>>& equity_curve) {
+    auto get_equity_values = [](const auto& equity_curve) {
         std::vector<double> values;
         values.reserve(equity_curve.size());
-        for (const auto& pair : equity_curve) {
-            values.push_back(pair.second);
+        for (const auto& entry : equity_curve) {
+            values.push_back(std::get<1>(entry));
         }
         return values;
     };
@@ -167,6 +176,14 @@ void Analytics::generateMarketConditionReport(std::shared_ptr<Portfolio> portfol
     }
 
     std::cout << "\n--- Performance by Trend ---\n";
+    // Helper function to convert TrendDirection enum to string
+    auto trendDirectionToString = [](TrendDirection dir) -> std::string {
+        switch (dir) {
+            case TrendDirection::SIDEWAYS :  return "SIDEWAYS";
+            default: return "UNKNOWN";
+        }
+    };
+
     for (const auto& [trend, trades] : trades_by_trend) {
         std::cout << "Trend: " << trendDirectionToString(trend) << ", Trades: " << trades.size() << std::endl;
     }

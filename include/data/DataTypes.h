@@ -39,6 +39,28 @@ struct OrderBook {
     std::vector<std::pair<double, double>> asks;
 };
 
+// Represents the side of an order.
+enum class OrderSide {
+    BUY,
+    SELL
+};
+
+// Represents the type of an order.
+enum class OrderType {
+    MARKET,
+    LIMIT
+};
+
+// Represents a single order to be placed on the exchange.
+struct Order {
+    long order_id = 0;
+    std::string symbol = "";
+    OrderSide side = OrderSide::BUY;
+    OrderType type = OrderType::LIMIT;
+    double price = 0.0;
+    double quantity = 0.0;
+};
+
 // --- Market State ---
 enum class VolatilityLevel {
     LOW,

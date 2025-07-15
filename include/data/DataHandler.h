@@ -39,9 +39,7 @@ public:
     virtual const std::vector<std::string>& getSymbols() const = 0;
 
     // For event-driven systems, allows external components to know when new data is ready.
-    virtual void notifyOnNewData(std::function<void()> callback) {
-        on_new_data_ = callback;
-    }
+    virtual void notifyOnNewData(std::function<void()> callback) = 0;
 
 protected:
     std::function<void()> on_new_data_;

@@ -83,5 +83,5 @@ void SimulatedExecutionHandler::onOrder(const OrderEvent& order_event) {
         commission
     );
 
-    event_queue_->push(fill_event);
+    event_queue_->push(std::make_shared<std::shared_ptr<Event>>(fill_event));
 }

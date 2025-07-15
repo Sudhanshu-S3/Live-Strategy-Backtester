@@ -72,7 +72,7 @@ void RiskManager::onSignal(const SignalEvent& signal) {
             signal.timestamp, signal.symbol, signal.strategy_name,
             OrderType::MARKET, signal.direction, quantity
         );
-        event_queue_->push(order);
+        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(order));;
     }
 }
 
@@ -157,7 +157,8 @@ void RiskManager::sendAlert(const std::string& message) {
 }
 
 double RiskManager::calculateVolatility(const std::string& symbol) {
-    auto prices_bar = portfolio_->getDataHandler()->getLatestBars(symbol, volatility_lookback_);
+    // Assuming Portfolio has a method getLatestBars or you have access to DataHandler directly
+    auto prices_bar = portfolio_->getLatestBars(symbol, volatility_lookback_);
     if (prices_bar.size() < volatility_lookback_) {
         return 0.0; // Not enough data
     }

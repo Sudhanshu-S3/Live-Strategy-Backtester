@@ -26,7 +26,7 @@ struct MarketEvent : public Event {
     long long timestamp;
     double price;
     MarketEvent(std::string symbol, long long ts, double p) 
-        : symbol(std::move(symbol)), timestamp(ts), price(p) { type = MARKET; }
+        : symbol(std::move(symbol)), timestamp(ts), price(p) { type = EventType::MARKET; }
 };
 
 struct TradeEvent : public Event {
@@ -36,7 +36,7 @@ struct TradeEvent : public Event {
     double quantity;
     std::string aggressor_side;
     TradeEvent(std::string s, long long ts, double p, double q, std::string side)
-        : symbol(std::move(s)), timestamp(ts), price(p), quantity(q), aggressor_side(std::move(side)) { type = TRADE; }
+        : symbol(std::move(s)), timestamp(ts), price(p), quantity(q), aggressor_side(std::move(side)) { type = EventType::TRADE; }
 };
 
 // Event for new market data

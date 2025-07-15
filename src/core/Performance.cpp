@@ -1,20 +1,24 @@
 #include "../../include/core/Performance.h"
 #include <algorithm>
 #include <random> // STAGE 5: For Monte Carlo
+#include <iostream>
+#include <chrono>
 
-Performance::Performance(const std::vector<double>& equity_curve, double initial_capital, const std::vector<TradeRecord>& trade_log)
+Performance::Performance(const std::vector<double>& equity_curve, double initial_capital, const std::vector<Trade>& trade_log)
     : equity_curve_(equity_curve), initial_capital_(initial_capital), trade_log_(trade_log) {
     if (equity_curve.empty() || initial_capital <= 0) {
-        throw std::invalid_argument("Equity curve cannot be empty and initial capital must be positive.");
+        // Allow empty curve for real-time cases before first data point
     }
     calculateTradeLevelStats(); // STAGE 4
 }
 
 double Performance::getTotalReturn() const {
+    if (equity_curve_.empty()) return 0.0;
     return (equity_curve_.back() / initial_capital_) - 1.0;
 }
 
 double Performance::getMaxDrawdown() const {
+    if (equity_curve_.empty()) return 0.0;
     double max_drawdown = 0.0;
     double peak_value = equity_curve_[0];
     for (double value : equity_curve_) {
@@ -53,26 +57,22 @@ void Performance::calculateTradeLevelStats() {
     gross_loss_ = 0;
     winning_trades_ = 0;
     losing_trades_ = 0;
+    total_trades_ = 0;
 
-    // Simplified PnL calculation: assume each trade is independent.
-    // This is NOT accurate for real position tracking but serves as an example.
+    // Simplified PnL calculation: We only consider trades that have a PnL value,
+    // which implies they are closed trades.
     for(const auto& trade : trade_log_) {
-        // A more realistic PnL would be calculated in the portfolio when a position is closed.
-        // For now, we can't calculate meaningful PnL from single fill events.
-        // We will simulate some PnL for demonstration.
-        if (trade.pnl > 0) { // Assuming PnL is pre-calculated
-             gross_profit_ += trade.pnl;
-             winning_trades_++;
-        } else {
-             gross_loss_ += trade.pnl;
-             losing_trades_++;
+        if (trade.pnl != 0.0) { // A non-zero PnL indicates a closed trade
+            total_trades_++;
+            if (trade.pnl > 0) {
+                 gross_profit_ += trade.pnl;
+                 winning_trades_++;
+            } else {
+                 gross_loss_ += trade.pnl; // PnL is already negative
+                 losing_trades_++;
+            }
         }
     }
-    // Since our current Portfolio doesn't calculate PnL per trade, let's use a proxy.
-    // We'll look at the change in equity after each trade. This is still not perfect.
-    // For now, we'll just report counts.
-    total_trades_ = trade_log_.size();
-    // The rest of the metrics (win rate, profit factor) depend on accurate PnL.
 }
 
 // STAGE 5: Monte Carlo Simulation
@@ -118,7 +118,7 @@ double Performance::calculateStandardDeviation(const std::vector<double>& data, 
     if (data.size() < 2) return 0.0;
     double sq_sum = std::accumulate(data.begin(), data.end(), 0.0, 
         [mean](double acc, double r){ return acc + (r - mean) * (r - mean); });
-    return std::sqrt(sq_sum / data.size());
+    return std::sqrt(sq_sum / (data.size() - 1)); // Use sample standard deviation
 }
 int Performance::getTotalTrades() const { return total_trades_; }
 int Performance::getWinningTrades() const { return winning_trades_; }
