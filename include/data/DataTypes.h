@@ -4,6 +4,12 @@
 #include <string>
 #include <vector>
 
+// --- Enums from former event/Event.h ---
+enum class OrderDirection {
+    BUY,
+    SELL
+};
+
 // --- Core Event Base Struct ---
 // Base struct for all events in the system.
 struct Event {
@@ -95,14 +101,16 @@ struct OrderBookEvent : public Event {
 
 // Event sent from a Strategy to the Portfolio.
 struct SignalEvent : public Event {
-    SignalEvent(const std::string& symbol, const std::string& timestamp, const std::string& signal_type, double strength = 1.0)
-        : symbol(symbol), timestamp(timestamp), signal_type(signal_type), strength(strength) {
-        type = SIGNAL;
-    }
     std::string symbol;
     std::string timestamp;
-    std::string signal_type; // "LONG", "SHORT", "EXIT"
-    double strength;
+    OrderDirection direction; // e.g., BUY or SELL
+    double strength; // A confidence score, e.g., 1.0 for full size
+    double stop_loss; // *** NEW: The price at which to place the stop-loss ***
+
+    SignalEvent(std::string symbol, std::string timestamp, OrderDirection direction, double stop_loss, double strength = 1.0)
+        : symbol(symbol), timestamp(timestamp), direction(direction), stop_loss(stop_loss), strength(strength) {
+        this->type = Event::SIGNAL;
+    }
 };
 
 // Event sent from Portfolio to the ExecutionHandler.

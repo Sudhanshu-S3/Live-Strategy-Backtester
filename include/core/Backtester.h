@@ -5,6 +5,7 @@
 #include "Strategy.h"
 #include "ExecutionHandler.h"
 #include "Portfolio.h"
+#include "../risk/RishManager.h" // Corrected path
 #include <memory>
 #include <queue>
 
@@ -17,7 +18,8 @@ public:
         std::shared_ptr<DataHandler> data_handler,
         std::shared_ptr<Strategy> strategy,
         std::shared_ptr<Portfolio> portfolio,
-        std::shared_ptr<ExecutionHandler> execution_handler
+        std::shared_ptr<ExecutionHandler> execution_handler,
+        std::shared_ptr<RiskManager> risk_manager // Added risk manager
     );
     
     void run();
@@ -30,6 +32,7 @@ private:
     std::shared_ptr<Strategy> strategy;
     std::shared_ptr<Portfolio> portfolio;
     std::shared_ptr<ExecutionHandler> execution_handler;
+    std::shared_ptr<RiskManager> risk_manager; // Added risk manager
     bool continue_backtest;
 };
 
