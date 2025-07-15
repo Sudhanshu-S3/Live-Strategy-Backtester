@@ -3,6 +3,7 @@
   "initial_capital": 100000.0,
   "symbols": ["BTCUSDT"],
   "data": {
+    "websocket_uri": "wss://stream.binance.com:9443/ws/btcusdt@trade",
     "trade_data_dir": "historical_data/trades",
     "book_data_dir": "historical_data/orderbooks",
     "historical_data_fallback_dir": "historical_data/full"
@@ -15,6 +16,18 @@
       "params": {
         "lookback_levels": 15,
         "imbalance_threshold": 1.7
+      }
+    },
+    {
+      "name": "MARKET_REGIME_DETECTOR",
+      "symbol": "BTCUSDT",
+      "active": true,
+      "params": {
+        "volatility_lookback": 20,
+        "trend_lookback": 50,
+        "high_vol_threshold": 0.02,
+        "low_vol_threshold": 0.005,
+        "trend_threshold_pct": 0.5
       }
     },
     {
@@ -44,8 +57,27 @@
     "in_sample_months": 2,
     "out_of_sample_months": 1
   },
+  "monte_carlo": {
+    "enabled": false,
+    "strategy_to_test": "ORDER_BOOK_IMBALANCE",
+    "num_simulations": 100,
+    "base_params": {
+      "lookback_levels": 15,
+      "imbalance_threshold": 1.7
+    },
+    "randomization_ranges": {
+      "lookback_levels": [10, 20],
+      "imbalance_threshold": [1.5, 2.0]
+    }
+  },
   "analytics": {
     "enable_cross_correlation": true,
     "anomaly_detection_z_score": 3.0
+  },
+  "stress_test": {
+    "enabled": false,
+    "scenario_name": "High Volatility Crash",
+    "volatility_multiplier": 3.0,
+    "price_shock_pct": -0.15
   }
 }

@@ -17,23 +17,34 @@ class DataHandler {
 public:
     virtual ~DataHandler() = default;
 
-    // Pushes the next available bar data as a MarketEvent onto the queue.
-    // This is the new "heartbeat" of the backtest.
-    virtual void updateBars(queue<shared_ptr<Event>>& event_queue) = 0;
-    
-    // Checks if there is no more data to process.
+    // Main loop processing function
+    virtual void updateBars() = 0;
+
+    // Returns true when all data has been processed.
     virtual bool isFinished() const = 0;
 
-    // Gets the most recently loaded bar for a specific symbol.
-    // The Strategy and Portfolio will use this to get detailed OHLCV data.
-    virtual optional<Bar> getLatestBar(const string& symbol) const = 0;
+    // Gets the latest loaded bar for a specific symbol.
+    virtual std::optional<Bar> getLatestBar(const std::string& symbol) const = 0;
 
-    // Gets the last known value for a symbol (e.g., "price").
-    // This provides a unified way to get the latest price, whether
+    // Gets a specific value from the latest bar for a symbol.
     virtual double getLatestBarValue(const std::string& symbol, const std::string& val_type) = 0;
 
     // Gets the n most recently loaded bars for a specific symbol.
     virtual std::vector<Bar> getLatestBars(const std::string& symbol, int n = 1) = 0;
+
+    // Gets the latest order book for a specific symbol.
+    virtual std::optional<OrderBook> getLatestOrderBook(const std::string& symbol) const = 0;
+
+    // Gets the list of symbols the data handler is managing.
+    virtual const std::vector<std::string>& getSymbols() const = 0;
+
+    // For event-driven systems, allows external components to know when new data is ready.
+    virtual void notifyOnNewData(std::function<void()> callback) {
+        on_new_data_ = callback;
+    }
+
+protected:
+    std::function<void()> on_new_data_;
 };
 
-#endif
+#endif // DATAHANDLER_H

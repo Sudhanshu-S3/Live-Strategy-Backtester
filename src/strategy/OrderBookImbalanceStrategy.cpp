@@ -7,14 +7,14 @@
 #include <immintrin.h>
 
 OrderBookImbalanceStrategy::OrderBookImbalanceStrategy(
-    std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
+    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
     std::shared_ptr<DataHandler> data_handler,
     const std::string& symbol,
     int lookback_levels,
     double imbalance_threshold
-) : Strategy(event_queue, data_handler, symbol, "ORDER_BOOK_IMBALANCE"),
+) : Strategy(event_queue, data_handler, "ORDER_BOOK_IMBALANCE", symbol),
     lookback_levels_(lookback_levels),
-    imbalance_threshold_(imbalance_threshold) 
+    base_imbalance_threshold_(imbalance_threshold) 
 {
     // STAGE 3: Pre-allocate aligned memory for SIMD
     bid_prices_f.resize(lookback_levels);
@@ -23,24 +23,44 @@ OrderBookImbalanceStrategy::OrderBookImbalanceStrategy(
     ask_qtys_f.resize(lookback_levels);
 }
 
-void OrderBookImbalanceStrategy::calculate_signals() {
-    if (!is_active_) return;
+void OrderBookImbalanceStrategy::onMarket(const MarketEvent& event) {
+    // Not used for this strategy
+}
 
-    auto hft_data_handler = std::dynamic_pointer_cast<HFTDataHandler>(data_handler_);
-    if (!hft_data_handler) return;
+void OrderBookImbalanceStrategy::onTrade(const TradeEvent& event) {
+    // Not used for this strategy
+}
 
-    OrderBook book = hft_data_handler->getLatestOrderBook(symbol_);
+void OrderBookImbalanceStrategy::onFill(const FillEvent& event) {
+    // Can be used to adjust strategy behavior based on fills
+}
+
+void OrderBookImbalanceStrategy::onMarketRegimeChanged(const MarketRegimeChangedEvent& event) {
+    current_market_state_ = event.new_state;
+}
+
+void OrderBookImbalanceStrategy::onOrderBook(const OrderBookEvent& event) {
+    if (event.symbol != symbol) return;
+
+    const OrderBook& book = event.book;
+
     if (book.bids.empty() || book.asks.empty()) {
         return;
     }
 
-    // STAGE 3: Incremental computation - only calculate on new book data
     if (book.timestamp == last_update_timestamp_) {
         return;
     }
     last_update_timestamp_ = book.timestamp;
 
-    // --- Standard C++ calculation ---
+    // Adjust threshold based on volatility
+    double current_imbalance_threshold = base_imbalance_threshold_;
+    if (current_market_state_.volatility == VolatilityLevel::HIGH) {
+        current_imbalance_threshold *= 1.5; // Require a stronger signal in high vol
+    } else if (current_market_state_.volatility == VolatilityLevel::LOW) {
+        current_imbalance_threshold *= 0.8; // Be more sensitive in low vol
+    }
+
     double total_bid_volume = 0;
     auto bid_it = book.bids.rbegin();
     for(int i = 0; i < lookback_levels_ && bid_it != book.bids.rend(); ++i, ++bid_it) {
@@ -53,31 +73,21 @@ void OrderBookImbalanceStrategy::calculate_signals() {
         total_ask_volume += ask_it->second;
     }
 
-    // --- STAGE 3: SIMD-accelerated calculation (example) ---
-    // This is a simplified example. A real use case would be more complex,
-    // e.g., calculating VWAP or other weighted metrics.
-    int n = std::min((int)book.bids.size(), lookback_levels_);
-    // Copy data to float vectors...
-    
-    __m256 bid_sum_vec = _mm256_setzero_ps();
-    for (int i = 0; i < n; i += 8) {
-        if (i + 8 <= n) {
-            __m256 qtys = _mm256_loadu_ps(&bid_qtys_f[i]);
-            bid_sum_vec = _mm256_add_ps(bid_sum_vec, qtys);
-        }
-    }
-    // Horizontal add to get the final sum
-    // float total_bid_volume_simd = ...;
-
-
     if (total_ask_volume > 1e-9) {
         double imbalance = total_bid_volume / total_ask_volume;
-        if (imbalance > imbalance_threshold_) {
-            // Strong buying pressure
+        if (imbalance > current_imbalance_threshold) {
             generate_signal(OrderDirection::BUY, 1.0);
-        } else if (imbalance < (1.0 / imbalance_threshold_)) {
-            // Strong selling pressure
+        } else if (imbalance < (1.0 / current_imbalance_threshold)) {
             generate_signal(OrderDirection::SELL, 1.0);
         }
     }
+}
+
+void OrderBookImbalanceStrategy::generate_signal(OrderDirection direction, double strength) {
+    long long timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    // For this strategy, let's assume no specific stop loss is calculated here,
+    // it could be handled by the RiskManager.
+    double stop_loss = 0.0; 
+    auto signal = std::make_shared<SignalEvent>(name, symbol, timestamp, direction, stop_loss, strength);
+    event_queue_->push(signal);
 }

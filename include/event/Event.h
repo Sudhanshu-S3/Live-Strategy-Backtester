@@ -3,61 +3,70 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
+#include "../data/DataTypes.h"
 
-// Enums for clarity and type safety
-enum class OrderDirection {
-    BUY,
-    SELL
+enum class OrderDirection { BUY, SELL, NONE };
+enum class OrderType { MARKET, LIMIT };
+
+enum class EventType {
+    MARKET, TRADE, ORDER_BOOK,
+    SIGNAL, ORDER, FILL, NEWS,
+    DATA_SOURCE_STATUS, MARKET_REGIME_CHANGED
 };
 
-enum class OrderType {
-    MARKET,
-    LIMIT
-};
-
-// Base struct for all events
 struct Event {
-    enum class EventType {
-    MARKET,
-    ORDER_BOOK,
-    TRADE,
-    SIGNAL,
-    ORDER,
-    FILL,
-    NEWS // <--- ADDED
-};
     virtual ~Event() = default;
     EventType type;
+    long long timestamp_received = 0; // Timestamp when the event was created/received by the system
+};
+
+struct MarketEvent : public Event {
+    std::string symbol;
+    long long timestamp;
+    double price;
+    MarketEvent(std::string symbol, long long ts, double p) 
+        : symbol(std::move(symbol)), timestamp(ts), price(p) { type = MARKET; }
+};
+
+struct TradeEvent : public Event {
+    std::string symbol;
+    long long timestamp;
+    double price;
+    double quantity;
+    std::string aggressor_side;
+    TradeEvent(std::string s, long long ts, double p, double q, std::string side)
+        : symbol(std::move(s)), timestamp(ts), price(p), quantity(q), aggressor_side(std::move(side)) { type = TRADE; }
 };
 
 // Event for new market data
-struct MarketEvent : public Event {
+struct OrderBookEvent : public Event {
     std::string symbol;
-    long long timestamp; // Using long long for timestamps
-    double price; 
+    long long timestamp;
+    OrderBook book;
 
-    MarketEvent(std::string symbol, long long timestamp, double price)
-        : symbol(symbol), timestamp(timestamp), price(price) {
-        this->type = Event::MARKET;
+    OrderBookEvent(const OrderBook& book)
+        : symbol(book.symbol), timestamp(book.timestamp), book(book) {
+        this->type = EventType::ORDER_BOOK;
     }
 };
 
 // Event sent from a Strategy to the Portfolio
 struct SignalEvent : public Event {
+    std::string strategy_name;
     std::string symbol;
     long long timestamp;
     OrderDirection direction;
     double strength;    // Confidence score (e.g., 1.0 for full size)
     double stop_loss;   // Price at which to place the stop-loss
 
-    SignalEvent(std::string symbol, long long timestamp, OrderDirection direction, double stop_loss, double strength = 1.0)
-        : symbol(symbol), timestamp(timestamp), direction(direction), stop_loss(stop_loss), strength(strength) {
-        this->type = Event::SIGNAL;
+    SignalEvent(std::string strategy_name, std::string symbol, long long timestamp, OrderDirection direction, double stop_loss, double strength = 1.0)
+        : strategy_name(std::move(strategy_name)), symbol(std::move(symbol)), timestamp(timestamp), direction(direction), stop_loss(stop_loss), strength(strength) {
+        this->type = EventType::SIGNAL;
     }
 };
 
-class NewsEvent : public Event {
-public:
+struct NewsEvent : public Event {
     std::string symbol;
     std::string timestamp;
     std::string headline;
@@ -71,21 +80,23 @@ public:
 };
 // Event sent from Portfolio to the ExecutionHandler
 struct OrderEvent : public Event {
+    std::string strategy_name;
     std::string symbol;
     long long timestamp;
     OrderType order_type;
     OrderDirection direction;
-    double quantity;
+    long quantity;
     double stop_loss; // To pass SL info to execution
 
-    OrderEvent(std::string symbol, long long timestamp, OrderType order_type, OrderDirection direction, double quantity, double stop_loss = 0.0)
-        : symbol(symbol), timestamp(timestamp), order_type(order_type), direction(direction), quantity(quantity), stop_loss(stop_loss) {
-        this->type = Event::ORDER;
+    OrderEvent(std::string strategy_name, std::string symbol, long long timestamp, OrderType order_type, OrderDirection direction, long quantity, double stop_loss = 0.0)
+        : strategy_name(std::move(strategy_name)), symbol(std::move(symbol)), timestamp(timestamp), order_type(order_type), direction(direction), quantity(quantity), stop_loss(stop_loss) {
+        this->type = EventType::ORDER;
     }
 };
 
 // Event sent from ExecutionHandler back to the Portfolio
 struct FillEvent : public Event {
+    std::string strategy_name;
     std::string symbol;
     long long timestamp;
     OrderDirection direction;
@@ -93,9 +104,30 @@ struct FillEvent : public Event {
     double fill_price;
     double commission;
 
-    FillEvent(long long timestamp, const std::string& symbol, OrderDirection direction, double quantity, double fill_price, double commission)
-        : timestamp(timestamp), symbol(symbol), direction(direction), quantity(quantity), fill_price(fill_price), commission(commission) {
-        this->type = Event::FILL;
+    FillEvent(long long timestamp, const std::string& symbol, const std::string& strategy_name, OrderDirection direction, double quantity, double fill_price, double commission)
+        : timestamp(timestamp), symbol(symbol), strategy_name(strategy_name), direction(direction), quantity(quantity), fill_price(fill_price), commission(commission) {
+        this->type = EventType::FILL;
+    }
+};
+
+// --- New System-Level Events ---
+
+enum class DataSourceStatus { CONNECTED, DISCONNECTED, RECONNECTING, FALLBACK_ACTIVE };
+
+struct DataSourceStatusEvent : public Event {
+    DataSourceStatus status;
+    std::string message;
+
+    DataSourceStatusEvent(DataSourceStatus status, std::string message)
+        : status(status), message(std::move(message)) {
+        type = EventType::DATA_SOURCE_STATUS;
+    }
+};
+
+struct MarketRegimeChangedEvent : public Event {
+    MarketState new_state;
+    MarketRegimeChangedEvent(const MarketState& state) : new_state(state) {
+        type = EventType::MARKET_REGIME_CHANGED;
     }
 };
 

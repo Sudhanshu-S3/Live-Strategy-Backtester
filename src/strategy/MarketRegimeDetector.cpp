@@ -1,108 +1,124 @@
 #include "../../include/strategy/MarketRegimeDetector.h"
-#include <numeric> // For std::accumulate
-#include <cmath>   // For std::sqrt
+#include <numeric>
+#include <cmath>
 #include <iostream>
 
-std::string marketRegimeToString(MarketRegime regime) {
-    switch (regime) {
-        case MarketRegime::NORMAL: return "NORMAL";
-        case MarketRegime::HIGH_VOLATILITY: return "HIGH_VOLATILITY";
-        case MarketRegime::LOW_VOLATILITY: return "LOW_VOLATILITY";
-        case MarketRegime::TRENDING_UP: return "TRENDING_UP";
-        case MarketRegime::TRENDING_DOWN: return "TRENDING_DOWN";
-        default: return "UNKNOWN";
+MarketRegimeDetector::MarketRegimeDetector(
+    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
+    std::shared_ptr<DataHandler> data_handler,
+    const std::string& symbol,
+    int volatility_lookback,
+    int trend_lookback,
+    double high_vol_threshold,
+    double low_vol_threshold,
+    double trend_threshold_pct
+) : Strategy(event_queue, data_handler, "MARKET_REGIME_DETECTOR", symbol),
+    volatility_lookback_(volatility_lookback),
+    trend_lookback_(trend_lookback),
+    high_vol_threshold_(high_vol_threshold),
+    low_vol_threshold_(low_vol_threshold),
+    trend_threshold_pct_(trend_threshold_pct) {}
+
+void MarketRegimeDetector::onMarket(const MarketEvent& event) {
+    if (event.symbol != symbol) return;
+
+    recent_prices_vol_.push_back(event.price);
+    if (recent_prices_vol_.size() > volatility_lookback_) {
+        recent_prices_vol_.pop_front();
+    }
+
+    recent_prices_trend_.push_back(event.price);
+    if (recent_prices_trend_.size() > trend_lookback_) {
+        recent_prices_trend_.pop_front();
+    }
+
+    MarketState old_state = current_state_;
+    update_volatility();
+    update_trend();
+
+    if (old_state.volatility != current_state_.volatility || old_state.trend != current_state_.trend) {
+        std::cout << "Market regime changed for " << symbol 
+                  << ": Volatility=" << static_cast<int>(current_state_.volatility) 
+                  << ", Trend=" << static_cast<int>(current_state_.trend) << std::endl;
+        auto regime_event = std::make_shared<MarketRegimeChangedEvent>(current_state_);
+        event_queue_->push(regime_event);
     }
 }
 
-MarketRegimeDetector::MarketRegimeDetector(std::shared_ptr<DataHandler> data_handler, 
-                                           std::shared_ptr<std::queue<std::shared_ptr<Event>>> event_queue,
-                                           const std::string& symbol,
-                                           int volatility_lookback_period,
-                                           double high_volatility_threshold,
-                                           double low_volatility_threshold)
-    : data_handler_(data_handler),
-      event_queue_(event_queue),
-      symbol_(symbol),
-      volatility_lookback_period_(volatility_lookback_period),
-      high_volatility_threshold_(high_volatility_threshold),
-      low_volatility_threshold_(low_volatility_threshold) {}
+void MarketRegimeDetector::onTrade(const TradeEvent& event) {
+    if (event.symbol != symbol) return;
+    // Potentially use trade data as well
+    onMarket(MarketEvent(event.symbol, event.timestamp, event.price));
+}
 
-void MarketRegimeDetector::update(const MarketEvent& market_event) {
-    if (market_event.symbol != symbol_) {
-        return; // Only process for the tracked symbol
-    }
+void MarketRegimeDetector::onOrderBook(const OrderBookEvent& event) {
+    // Not used for this strategy
+}
 
-    double current_price = data_handler_->getLatestBarValue(symbol_, "price");
-    if (current_price <= 0) {
-        return; // No valid price
-    }
+void MarketRegimeDetector::onFill(const FillEvent& event) {
+    // Not used for this strategy
+}
 
-    recent_prices_.push_back(current_price);
-    if (recent_prices_.size() > volatility_lookback_period_) {
-        recent_prices_.pop_front();
-    }
+MarketState MarketRegimeDetector::getCurrentState() const {
+    return current_state_;
+}
 
-    if (recent_prices_.size() < volatility_lookback_period_) {
-        current_regime_ = MarketRegime::NORMAL; // Not enough data yet
-        return;
-    }
+void MarketRegimeDetector::update_volatility() {
+    if (recent_prices_vol_.size() < 2) return;
+    
+    double mean = calculateMean(recent_prices_vol_);
+    double stddev = calculateStandardDeviation(recent_prices_vol_);
+    double realized_vol = stddev / mean;
+    current_state_.volatility_value = realized_vol;
 
-    double volatility = calculateStandardDeviation(recent_prices_);
-    // std::cout << "DEBUG: Volatility for " << symbol_ << ": " << volatility << std::endl;
-
-    MarketRegime new_regime = MarketRegime::NORMAL;
-
-    if (volatility > high_volatility_threshold_) {
-        new_regime = MarketRegime::HIGH_VOLATILITY;
-    } else if (volatility < low_volatility_threshold_) {
-        new_regime = MarketRegime::LOW_VOLATILITY;
+    if (realized_vol > high_vol_threshold_) {
+        current_state_.volatility = VolatilityLevel::HIGH;
+    } else if (realized_vol < low_vol_threshold_) {
+        current_state_.volatility = VolatilityLevel::LOW;
     } else {
-        new_regime = MarketRegime::NORMAL; // Default
-    }
-
-    // Basic trend detection (can be more sophisticated with MAs etc.)
-    if (recent_prices_.size() >= 2) {
-        if (recent_prices_.back() > recent_prices_.front() * 1.005) { // 0.5% increase over period
-            new_regime = MarketRegime::TRENDING_UP;
-        } else if (recent_prices_.back() < recent_prices_.front() * 0.995) { // 0.5% decrease over period
-            new_regime = MarketRegime::TRENDING_DOWN;
-        }
-    }
-
-
-    if (new_regime != current_regime_) {
-        std::cout << "MARKET REGIME DETECTOR: Regime changed from " 
-                  << marketRegimeToString(current_regime_) << " to " 
-                  << marketRegimeToString(new_regime) << " for " << symbol_ << std::endl;
-        current_regime_ = new_regime;
-        // Optionally, send a RegimeChangeEvent to the event queue
-        // events_->push(std::make_shared<RegimeChangeEvent>(symbol_, market_event.timestamp, new_regime));
+        current_state_.volatility = VolatilityLevel::NORMAL;
     }
 }
 
-MarketRegime MarketRegimeDetector::getCurrentRegime() const {
-    return current_regime_;
+void MarketRegimeDetector::update_trend() {
+    if (recent_prices_trend_.size() < trend_lookback_) return;
+
+    double oldest_price = recent_prices_trend_.front();
+    double newest_price = recent_prices_trend_.back();
+    double pct_change = (newest_price - oldest_price) / oldest_price;
+
+    if (pct_change > trend_threshold_pct_) {
+        current_state_.trend = TrendDirection::TRENDING_UP;
+    } else if (pct_change < -trend_threshold_pct_) {
+        current_state_.trend = TrendDirection::TRENDING_DOWN;
+    } else {
+        current_state_.trend = TrendDirection::SIDEWAYS;
+    }
 }
 
 double MarketRegimeDetector::calculateMean(const std::deque<double>& data) const {
-    if (data.empty()) {
-        return 0.0;
-    }
-    double sum = 0.0;
-    for (double val : data) {
-        sum += val;
-    }
+    double sum = std::accumulate(data.begin(), data.end(), 0.0);
     return sum / data.size();
 }
 
 double MarketRegimeDetector::calculateStandardDeviation(const std::deque<double>& data) const {
-    if (data.size() < 2) {
-        return 0.0;
-    }
+    if (data.size() < 2) return 0.0;
     double mean = calculateMean(data);
-    double sq_sum = 0.0;
-    for (double val : data) {
-        sq_sum += (val - mean) * (val - mean);
+    double sq_sum = std::inner_product(data.begin(), data.end(), data.begin(), 0.0);
+    return std::sqrt(sq_sum / data.size() - mean * mean);
+}
+
+std::string marketStateToString(const MarketState& state) {
+    std::string vol_str, trend_str;
+    switch(state.volatility) {
+        case VolatilityLevel::LOW: vol_str = "LOW"; break;
+        case VolatilityLevel::NORMAL: vol_str = "NORMAL"; break;
+        case VolatilityLevel::HIGH: vol_str = "HIGH"; break;
     }
-    return std::sqrt(sq_sum / data.size()); // Population standard deviation
+    switch(state.trend) {
+        case TrendDirection::SIDEWAYS: trend_str = "SIDEWAYS"; break;
+        case TrendDirection::TRENDING_UP: trend_str = "UP"; break;
+        case TrendDirection::TRENDING_DOWN: trend_str = "DOWN"; break;
+    }
+    return "Vol: " + vol_str + ", Trend: " + trend_str;
 }

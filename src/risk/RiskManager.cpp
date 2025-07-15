@@ -1,8 +1,9 @@
-#include "../../include/risk/RishManager.h" 
+#include "../../include/risk/RiskManager.h" 
 #include "../../include/event/Event.h"
 #include <cmath>
 #include <iostream>
 #include <memory> // For std::make_unique
+#include <numeric>
 #include <vector> // For performance calculation
 
 // Helper function to convert OrderDirection enum to string for logging
@@ -15,111 +16,86 @@ std::string orderDirectionToString(OrderDirection dir) {
     }
 }
 
-RiskManager::RiskManager(EventQueue& events, Portfolio& portfolio, double risk_per_trade_pct, const RiskThresholds& thresholds) : 
-    events_(events), 
-    portfolio_(portfolio),
-    risk_per_trade_pct_(risk_per_trade_pct),
-    thresholds_(thresholds) {}
+RiskManager::RiskManager(std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue, 
+                         std::shared_ptr<Portfolio> portfolio, 
+                         const nlohmann::json& risk_config) : 
+    event_queue_(event_queue), 
+    portfolio_(portfolio)
+{
+    thresholds_.max_drawdown_pct = risk_config.value("max_drawdown_pct", 0.20);
+    thresholds_.daily_var_95_pct = risk_config.value("daily_var_95_pct", 0.05);
+    thresholds_.portfolio_loss_threshold_pct = risk_config.value("portfolio_loss_threshold_pct", 0.10);
+
+    use_volatility_sizing_ = risk_config.value("use_volatility_sizing", false);
+    risk_per_trade_pct_ = risk_config.value("risk_per_trade_pct", 0.01);
+    volatility_lookback_ = risk_config.value("volatility_lookback", 20);
+}
 
 void RiskManager::onSignal(const SignalEvent& signal) {
-    OrderDirection direction;
-    if (signal.signal_type == "LONG") {
-        direction = OrderDirection::BUY;
-    } else if (signal.signal_type == "SHORT") {
-        direction = OrderDirection::SELL;
-    } else if (signal.signal_type == "EXIT") { // Handle EXIT signals for closing positions
-        direction = OrderDirection::NONE; // Indicates closing, not opening a new direction
-    } else { 
-        return; // Ignore unknown signal types
-    }
-
-    // Get current total equity from the portfolio
-    double equity = portfolio_.get_total_equity();
-    if (equity <= 0) {
-        std::cerr << "RISK MANAGER: Equity is zero or negative. Cannot place trades." << std::endl;
+    if (trading_halted_) {
+        std::cout << "RISK ALERT: Trading halted. Ignoring signal for " << signal.symbol << std::endl;
         return;
     }
 
-    // Prevent opening a new position if one already exists in the same direction
-    // For EXIT signals, this check is different; we allow closing.
-    std::string current_pos_direction = portfolio_.getPositionDirection(signal.symbol);
-    if (direction != OrderDirection::NONE) { // Only check for opening new positions
-        if ((direction == OrderDirection::BUY && current_pos_direction == "LONG") || 
-            (direction == OrderDirection::SELL && current_pos_direction == "SHORT")) {
-            // std::cout << "RISK MANAGER: Already in a " << current_pos_direction << " position for " << signal.symbol << ". Ignoring signal to open new position." << std::endl;
-            return;
-        }
+    double total_equity = portfolio_->get_total_equity();
+    double cash = portfolio_->getCash();
+    double last_price = portfolio_->get_last_price(signal.symbol);
+
+    if (last_price <= 0) {
+        std::cerr << "RiskManager: Could not get last price for " << signal.symbol << ". Order rejected." << std::endl;
+        return;
     }
 
-
-    // --- Position Sizing Logic (for opening new positions) ---
-    double quantity = 0.0;
-    std::string order_type = "MKT"; // Default to market order
-
-    if (direction == OrderDirection::NONE) { // EXIT signal
-        // Logic for closing an existing position.
-        // The quantity for an exit should be the current position quantity.
-        quantity = std::abs(portfolio_.get_position(signal.symbol));
-        if (quantity == 0) {
-            // std::cout << "RISK MANAGER: No open position to exit for " << signal.symbol << ". Ignoring EXIT signal." << std::endl;
-            return;
+    double quantity = 0;
+    if (use_volatility_sizing_) {
+        double volatility = calculateVolatility(signal.symbol);
+        if (volatility > 1e-6) {
+            // Size based on volatility (e.g., inverse volatility)
+            // A simple example: risk amount / (volatility * price)
+            double risk_amount = total_equity * risk_per_trade_pct_;
+            quantity = risk_amount / (volatility * last_price);
+        } else {
+            std::cerr << "RiskManager: Volatility is zero for " << signal.symbol << ". Using fixed sizing." << std::endl;
+            quantity = (total_equity * risk_per_trade_pct_) / last_price;
         }
-        // Determine exit direction
-        if (current_pos_direction == "LONG") {
-            direction = OrderDirection::SELL;
-        } else if (current_pos_direction == "SHORT") {
-            direction = OrderDirection::BUY;
-        }
-    } else { // LONG or SHORT signal (opening new position)
-        double last_price = portfolio_.get_last_price(signal.symbol);
-        if (last_price <= 0) {
-            std::cerr << "RISK MANAGER: Cannot get last price for " << signal.symbol << ". Ignoring signal." << std::endl;
-            return;
-        }
-
-        double risk_amount = equity * risk_per_trade_pct_;
-        // Assuming signal.stop_loss is provided and valid for risk calculation
-        if (signal.stop_loss <= 0) { // Simple validation
-             std::cerr << "RISK MANAGER: Invalid stop loss for " << signal.symbol << ". Ignoring signal." << std::endl;
-             return;
-        }
-        
-        double price_difference = std::abs(last_price - signal.stop_loss);
-
-        if (price_difference < 1e-9) { 
-            std::cerr << "RISK MANAGER: Stop loss is too close to the current price for " << signal.symbol << ". Ignoring signal." << std::endl;
-            return; 
-        }
-        quantity = risk_amount / price_difference;
+    } else {
+        // Fixed fractional position sizing
+        quantity = (total_equity * risk_per_trade_pct_) / last_price;
     }
+
+    if (quantity * last_price > cash) {
+        quantity = cash / last_price * 0.99; // Ensure we have enough cash, with a buffer
+    }
+
+    if (quantity > 0) {
+        auto order = std::make_shared<OrderEvent>(
+            signal.timestamp, signal.symbol, signal.strategy_name,
+            OrderType::MARKET, signal.direction, quantity
+        );
+        event_queue_->push(order);
+    }
+}
+
+void RiskManager::onDataSourceStatus(const DataSourceStatusEvent& event) {
+    std::string status_str;
+    switch (event.status) {
+        case DataSourceStatus::CONNECTED: status_str = "CONNECTED"; break;
+        case DataSourceStatus::DISCONNECTED: status_str = "DISCONNECTED"; break;
+        case DataSourceStatus::RECONNECTING: status_str = "RECONNECTING"; break;
+        case DataSourceStatus::FALLBACK_ACTIVE: status_str = "FALLBACK_ACTIVE"; break;
+    }
+    std::cout << "RISK MANAGER: Data source status changed to " << status_str 
+              << ". Message: " << event.message << std::endl;
     
-    if (quantity <= 0) {
-        std::cerr << "RISK MANAGER: Calculated quantity is zero or negative. Ignoring signal." << std::endl;
-        return;
-    }
-
-    // --- Create and Push the Order Event ---
-    OrderEvent order(
-        signal.symbol,
-        signal.timestamp,
-        order_type, // OrderType is string in DataTypes.h
-        orderDirectionToString(direction), // direction is string
-        static_cast<long>(quantity) // Ensure quantity is integer for order size
-    );
-
-    std::cout << "RISK MANAGER: Approving trade for " << signal.symbol 
-              << ". Direction=" << order.direction
-              << ", Quantity=" << order.quantity 
-              << ". Current Equity: " << equity << std::endl;
-
-    events_.push(std::make_shared<OrderEvent>(order));
+    // Here you could add logic to pause strategies or liquidate positions
+    // if the status is critical (e.g., DISCONNECTED or FALLBACK_ACTIVE)
 }
 
 void RiskManager::monitorRealTimeRisk() {
-    std::cout << "\nRISK MANAGER: Monitoring real-time risk..." << std::endl;
+    if (trading_halted_) return;
 
     // 1. Monitor Max Drawdown
-    double current_max_drawdown = portfolio_.getMaxDrawdown();
+    double current_max_drawdown = portfolio_->getMaxDrawdown();
     if (current_max_drawdown > thresholds_.max_drawdown_pct) {
         sendAlert("CRITICAL ALERT: Max Drawdown Exceeded! Current: " + 
                   std::to_string(current_max_drawdown * 100) + "% | Threshold: " + 
@@ -133,7 +109,7 @@ void RiskManager::monitorRealTimeRisk() {
     // 2. Monitor VaR (using the latest equity curve from Portfolio)
     // VaR usually requires a series of returns. For real-time, we'd use recent returns.
     // The Performance class already takes the equity curve and calculates returns internally.
-    Performance current_performance = portfolio_.getRealTimePerformance();
+    Performance current_performance = portfolio_->getRealTimePerformance();
     double current_var_95 = current_performance.calculateVaR(0.95);
 
     if (current_var_95 > thresholds_.daily_var_95_pct) {
@@ -146,7 +122,7 @@ void RiskManager::monitorRealTimeRisk() {
     }
 
     // 3. Monitor Current Positions
-    std::map<std::string, Position> current_positions = portfolio_.getCurrentPositions();
+    std::map<std::string, Position> current_positions = portfolio_->getCurrentPositions();
     if (!current_positions.empty()) {
         std::cout << "Current Open Positions:" << std::endl;
         for (const auto& pair : current_positions) {
@@ -160,9 +136,42 @@ void RiskManager::monitorRealTimeRisk() {
         std::cout << "No open positions." << std::endl;
     }
     std::cout << "--------------------------------------\n";
+
+    // New: Circuit Breaker Logic
+    double current_equity = portfolio_->get_total_equity();
+    double initial_capital = portfolio_->getInitialCapital();
+    double loss_pct = (initial_capital - current_equity) / initial_capital;
+
+    if (loss_pct > thresholds_.portfolio_loss_threshold_pct) {
+        trading_halted_ = true;
+        sendAlert("CRITICAL: PORTFOLIO CIRCUIT BREAKER TRIPPED! TRADING HALTED.");
+        // Optionally, send orders to liquidate all positions
+    }
 }
 
 void RiskManager::sendAlert(const std::string& message) {
     std::cerr << "!!!!! RISK ALERT !!!!! " << message << std::endl;
     // In a real system, this would send an email, SMS, or push notification.
+    auto alert_event = std::make_shared<Event>(); // Needs a proper AlertEvent
+    // event_queue_->push(alert_event);
+}
+
+double RiskManager::calculateVolatility(const std::string& symbol) {
+    auto prices_bar = portfolio_->getDataHandler()->getLatestBars(symbol, volatility_lookback_);
+    if (prices_bar.size() < volatility_lookback_) {
+        return 0.0; // Not enough data
+    }
+
+    std::vector<double> returns;
+    for (size_t i = 1; i < prices_bar.size(); ++i) {
+        returns.push_back(log(prices_bar[i].close / prices_bar[i-1].close));
+    }
+
+    if (returns.size() < 2) return 0.0;
+
+    double mean = std::accumulate(returns.begin(), returns.end(), 0.0) / returns.size();
+    double sq_sum = std::inner_product(returns.begin(), returns.end(), returns.begin(), 0.0);
+    double stdev = std::sqrt(sq_sum / returns.size() - mean * mean);
+    
+    return stdev; // Returns daily/periodic volatility
 }
