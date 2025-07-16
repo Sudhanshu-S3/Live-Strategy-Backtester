@@ -3,6 +3,7 @@
 
 #include "DataHandler.h"
 #include "../event/ThreadSafeQueue.h"
+#include "../event/Event.h" 
 #include <string>
 #include <vector>
 #include <map>
@@ -35,12 +36,11 @@ private:
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
     std::string uri_;
     std::vector<std::string> symbols_;
-    std::map<std::string, Bar> latest_bars_map_;
-    
     std::unique_ptr<client> ws_client_;
     std::thread ws_thread_;
     
     bool finished_ = false;
+    std::map<std::string, Bar> latest_bars_map_;
 };
 
-#endif // WEBSOCKET_DATA_HANDLER_H 
+#endif // WEBSOCKET_DATA_HANDLER_H

@@ -4,7 +4,8 @@
 #include "DataHandler.h"
 #include "DataTypes.h"
 #include "event/Event.h"
-#include "lib/mio/mio.hpp"
+#include "../../include/event/EventQueue.h" // Add this line to include EventQueue definition
+#include "../../../lib/mio/mio.hpp"
 #include "../event/ThreadSafeQueue.h"
 #include <optional> // For std::optional
 #include <string>
@@ -24,7 +25,7 @@ public:
 
     // Override the new interface methods.
     void updateBars() override;
-    void continue_backtest() override;
+    void continue_backtest();
     bool isFinished() const override;
     std::optional<Bar> getLatestBar(const std::string& symbol) const override;
     double getLatestBarValue(const std::string& symbol, const std::string& val_type) override;

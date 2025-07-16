@@ -32,13 +32,9 @@ void HistoricCSVDataHandler::open_and_map_csv(const std::string& symbol) {
         throw std::runtime_error("Could not map file: " + filepath);
     }
     mapped_files_.emplace(symbol, std::move(mmap));
-    file_cursors_.emplace(symbol, mapped_files_.at(symbol).data());
-    // Skip header
-    const char* end_of_line = strchr(file_cursors_.at(symbol), '\n');
-    if (end_of_line) {
-        file_cursors_.at(symbol) = end_of_line + 1;
-    }
+    file_cursors_.emplace(symbol, reinterpret_cast<const char*>(mapped_files_.at(symbol).data()));
 }
+
 /*
 void HistoricCSVDataHandler::update_bars() {
     for (const auto& symbol : symbols_) {
@@ -174,8 +170,8 @@ void HistoricCSVDataHandler::updateBars() {
 
     if (!next_symbol_to_process.empty()) {
         const auto& bar_to_process = *current_bar_iterators.at(next_symbol_to_process);
-        auto market_event = make_shared<MarketEvent>(bar_to_process.symbol, bar_to_process.timestamp);
-        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(market_event));
+        auto market_event = make_shared<MarketEvent>(bar_to_process.symbol, std::stoll(bar_to_process.timestamp), bar_to_process.close);
+        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::static_pointer_cast<Event>(market_event)));
 
         latest_bars_map[next_symbol_to_process] = bar_to_process;
 

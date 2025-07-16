@@ -3,10 +3,11 @@
 #include <random> // STAGE 5: For Monte Carlo
 #include <iostream>
 #include <chrono>
+#include <iomanip> // <-- FIX: Added missing header for std::setprecision
 
 Performance::Performance(const std::vector<double>& equity_curve, double initial_capital, const std::vector<Trade>& trade_log)
     : equity_curve_(equity_curve), initial_capital_(initial_capital), trade_log_(trade_log) {
-    if (equity_curve.empty() || initial_capital <= 0) {
+    if (equity_curve_.empty() || initial_capital_ <= 0) {
         // Allow empty curve for real-time cases before first data point
     }
     calculateTradeLevelStats(); // STAGE 4

@@ -2,16 +2,17 @@
 #include "../../include/event/Event.h"
 #include <cmath>
 #include <iostream>
-#include <memory> // For std::make_unique
+#include <iomanip> // <--- ADD THIS LINE for std::setprecision
+#include <memory> 
 #include <numeric>
-#include <vector> // For performance calculation
+#include <vector> 
 
 // Helper function to convert OrderDirection enum to string for logging
 std::string orderDirectionToString(OrderDirection dir) {
     switch (dir) {
         case OrderDirection::BUY: return "BUY";
         case OrderDirection::SELL: return "SELL";
-        case OrderDirection::NONE: return "NONE"; // Added NONE
+        case OrderDirection::NONE: return "NONE"; 
         default: return "UNKNOWN";
     }
 }
@@ -38,7 +39,8 @@ void RiskManager::onSignal(const SignalEvent& signal) {
     }
 
     double total_equity = portfolio_->get_total_equity();
-    double cash = portfolio_->getCash();
+    // Assumes Portfolio has a public get_cash() method
+    double cash = portfolio_->get_cash(); 
     double last_price = portfolio_->get_last_price(signal.symbol);
 
     if (last_price <= 0) {
@@ -50,8 +52,6 @@ void RiskManager::onSignal(const SignalEvent& signal) {
     if (use_volatility_sizing_) {
         double volatility = calculateVolatility(signal.symbol);
         if (volatility > 1e-6) {
-            // Size based on volatility (e.g., inverse volatility)
-            // A simple example: risk amount / (volatility * price)
             double risk_amount = total_equity * risk_per_trade_pct_;
             quantity = risk_amount / (volatility * last_price);
         } else {
@@ -59,20 +59,22 @@ void RiskManager::onSignal(const SignalEvent& signal) {
             quantity = (total_equity * risk_per_trade_pct_) / last_price;
         }
     } else {
-        // Fixed fractional position sizing
         quantity = (total_equity * risk_per_trade_pct_) / last_price;
     }
 
     if (quantity * last_price > cash) {
-        quantity = cash / last_price * 0.99; // Ensure we have enough cash, with a buffer
+        quantity = cash / last_price * 0.99; 
     }
 
     if (quantity > 0) {
-        auto order = std::make_shared<OrderEvent>(
-            signal.timestamp, signal.symbol, signal.strategy_name,
-            OrderType::MARKET, signal.direction, quantity
-        );
-        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(order));;
+        // --- FIX: Argument order and types corrected for OrderEvent constructor
+        auto order = std::make_shared<OrderEvent>(signal.symbol, signal.timestamp, signal.direction, quantity, OrderType::MARKET, signal.strategy_name);
+
+        // FIX: Wrap the event in another shared_ptr to match the queue type.
+        // This seems to be a design pattern in this project, though it is unusual.
+        if (event_queue_) {
+            event_queue_->push(std::make_shared<std::shared_ptr<Event>>(order));
+        }
     }
 }
 
@@ -86,29 +88,22 @@ void RiskManager::onDataSourceStatus(const DataSourceStatusEvent& event) {
     }
     std::cout << "RISK MANAGER: Data source status changed to " << status_str 
               << ". Message: " << event.message << std::endl;
-    
-    // Here you could add logic to pause strategies or liquidate positions
-    // if the status is critical (e.g., DISCONNECTED or FALLBACK_ACTIVE)
 }
 
 void RiskManager::monitorRealTimeRisk() {
     if (trading_halted_) return;
 
-    // 1. Monitor Max Drawdown
-    double current_max_drawdown = portfolio_->getMaxDrawdown();
+    // Assumes Portfolio has a public get_max_drawdown() method
+    double current_max_drawdown = portfolio_->get_max_drawdown(); 
     if (current_max_drawdown > thresholds_.max_drawdown_pct) {
         sendAlert("CRITICAL ALERT: Max Drawdown Exceeded! Current: " + 
                   std::to_string(current_max_drawdown * 100) + "% | Threshold: " + 
                   std::to_string(thresholds_.max_drawdown_pct * 100) + "%");
-        // Implement automatic stop or strategy disable here if desired
     } else {
         std::cout << "Current Max Drawdown: " << std::fixed << std::setprecision(2) 
                   << current_max_drawdown * 100 << "% (Below threshold)" << std::endl;
     }
 
-    // 2. Monitor VaR (using the latest equity curve from Portfolio)
-    // VaR usually requires a series of returns. For real-time, we'd use recent returns.
-    // The Performance class already takes the equity curve and calculates returns internally.
     Performance current_performance = portfolio_->getRealTimePerformance();
     double current_var_95 = current_performance.calculateVaR(0.95);
 
@@ -121,7 +116,6 @@ void RiskManager::monitorRealTimeRisk() {
                   << current_var_95 * 100 << "% (Below threshold)" << std::endl;
     }
 
-    // 3. Monitor Current Positions
     std::map<std::string, Position> current_positions = portfolio_->getCurrentPositions();
     if (!current_positions.empty()) {
         std::cout << "Current Open Positions:" << std::endl;
@@ -137,7 +131,6 @@ void RiskManager::monitorRealTimeRisk() {
     }
     std::cout << "--------------------------------------\n";
 
-    // New: Circuit Breaker Logic
     double current_equity = portfolio_->get_total_equity();
     double initial_capital = portfolio_->getInitialCapital();
     double loss_pct = (initial_capital - current_equity) / initial_capital;
@@ -145,22 +138,20 @@ void RiskManager::monitorRealTimeRisk() {
     if (loss_pct > thresholds_.portfolio_loss_threshold_pct) {
         trading_halted_ = true;
         sendAlert("CRITICAL: PORTFOLIO CIRCUIT BREAKER TRIPPED! TRADING HALTED.");
-        // Optionally, send orders to liquidate all positions
     }
 }
 
 void RiskManager::sendAlert(const std::string& message) {
     std::cerr << "!!!!! RISK ALERT !!!!! " << message << std::endl;
-    // In a real system, this would send an email, SMS, or push notification.
-    auto alert_event = std::make_shared<Event>(); // Needs a proper AlertEvent
+    // auto alert_event = std::make_shared<Event>(); 
     // event_queue_->push(alert_event);
 }
 
 double RiskManager::calculateVolatility(const std::string& symbol) {
-    // Assuming Portfolio has a method getLatestBars or you have access to DataHandler directly
-    auto prices_bar = portfolio_->getLatestBars(symbol, volatility_lookback_);
+    // Assumes Portfolio has a public get_latest_bars() method
+    auto prices_bar = portfolio_->get_latest_bars(symbol, volatility_lookback_); 
     if (prices_bar.size() < volatility_lookback_) {
-        return 0.0; // Not enough data
+        return 0.0; 
     }
 
     std::vector<double> returns;
@@ -174,5 +165,5 @@ double RiskManager::calculateVolatility(const std::string& symbol) {
     double sq_sum = std::inner_product(returns.begin(), returns.end(), returns.begin(), 0.0);
     double stdev = std::sqrt(sq_sum / returns.size() - mean * mean);
     
-    return stdev; // Returns daily/periodic volatility
-}
+    return stdev;
+};

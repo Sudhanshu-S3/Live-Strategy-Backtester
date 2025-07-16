@@ -2,21 +2,19 @@
 #define SIMULATED_EXECUTION_HANDLER_H
 
 #include "ExecutionHandler.h"
-#include "../data/DataHandler.h"
 #include "../event/ThreadSafeQueue.h"
-#include "../event/Event.h"
-#include <memory>
+#include "../data/DataHandler.h"
 
 class SimulatedExecutionHandler : public ExecutionHandler {
+private:
+    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
+    std::shared_ptr<DataHandler> data_handler_;
+
 public:
-    SimulatedExecutionHandler(std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue, 
+    SimulatedExecutionHandler(std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
                               std::shared_ptr<DataHandler> data_handler);
 
     void onOrder(const OrderEvent& order) override;
-
-private:
-    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
-    std::shared_ptr<DataHandler> data_handler_; 
 };
 
 #endif // SIMULATED_EXECUTION_HANDLER_H

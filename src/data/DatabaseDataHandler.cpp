@@ -33,7 +33,6 @@ DatabaseDataHandler::DatabaseDataHandler(std::shared_ptr<ThreadSafeQueue<std::sh
 
 DatabaseDataHandler::~DatabaseDataHandler() {
     if (conn && conn->is_open()) {
-        conn->disconnect();
         std::cout << "Database connection closed." << std::endl;
     }
 }
@@ -90,7 +89,8 @@ void DatabaseDataHandler::updateBars() {
         }
 
         if (it != data_chunks_.at(symbol).end()) {
-            std::string current_time = (*it)[0].as<std::string>();
+            const pqxx::row& row = *it;
+            std::string current_time = row[0].as<std::string>();
             if (current_time < earliest_time) {
                 earliest_time = current_time;
                 next_symbol_to_process = symbol;
@@ -99,18 +99,31 @@ void DatabaseDataHandler::updateBars() {
     }
 
     if (!next_symbol_to_process.empty()) {
-        auto& row = *data_iterators_.at(next_symbol_to_process);
+        const auto& row = *data_iterators_.at(next_symbol_to_process);
         
-        Bar bar;
-        bar.symbol = next_symbol_to_process;
-        bar.timestamp = row[0].as<std::string>();
-        bar.open = row[1].as<double>();
-        bar.high = row[2].as<double>();
-        bar.low = row[3].as<double>();
-        bar.close = row[4].as<double>();
-        bar.volume = row[5].as<long long>();
+        // Convert timestamp string to long long before creating the event
+        long long timestamp_ll = 0;
+        try {
+            timestamp_ll = std::stoll(row[0].as<std::string>());
+        } catch (const std::invalid_argument& ia) {
+            std::cerr << "Invalid argument: " << ia.what() << " for timestamp " << row[0].as<std::string>() << std::endl;
+            // Handle error, maybe skip this bar
+            data_iterators_.at(next_symbol_to_process)++;
+            return;
+        } catch (const std::out_of_range& oor) {
+            std::cerr << "Out of Range error: " << oor.what() << " for timestamp " << row[0].as<std::string>() << std::endl;
+            // Handle error
+            data_iterators_.at(next_symbol_to_process)++;
+            return;
+        }
 
-        event_queue_->push(std::make_shared<MarketEvent>(bar.symbol, bar.timestamp));
+        auto market_event = std::make_shared<MarketEvent>(
+            next_symbol_to_process, 
+            timestamp_ll, 
+            row[4].as<double>() // close price
+        );
+        event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::static_pointer_cast<Event>(market_event)));
+
         
         data_iterators_.at(next_symbol_to_process)++;
     }

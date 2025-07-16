@@ -1,8 +1,9 @@
 #ifndef DATABASE_DATA_HANDLER_H
 #define DATABASE_DATA_HANDLER_H
 
-#include "DataHandler.h"
-#include "../event/ThreadSafeQueue.h"
+#include "../../include/data/DataHandler.h"
+#include "../../include/event/Event.h"
+#include "../../include/event/ThreadSafeQueue.h"
 #include <pqxx/pqxx>
 #include <string>
 #include <vector>

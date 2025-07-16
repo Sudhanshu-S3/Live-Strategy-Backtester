@@ -2,11 +2,11 @@
 #define PERFORMANCE_H
 
 #include <vector>
-#include <numeric> // For std::accumulate
-#include <cmath>   // For std::sqrt
+#include <numeric>   // For std::accumulate
+#include <cmath>     // For std::sqrt
 #include <stdexcept>
-#include <map>     // Required for correlation
-#include "Portfolio.h" // Include Portfolio to get Trade struct definition
+#include <map>       // Required for correlation
+#include "data/DataTypes.h" // <-- FIX: Changed path from "DataTypes.h" to "data/DataTypes.h"
 
 class Performance {
 public:
@@ -31,8 +31,8 @@ public:
     void runMonteCarloSimulation(int num_simulations) const;
 
 private:
-    std::vector<double> equity_curve;
-    double initial_capital;
+    std::vector<double> equity_curve_;
+    double initial_capital_;
     std::vector<Trade> trade_log_;
 
     // Trade-level stats

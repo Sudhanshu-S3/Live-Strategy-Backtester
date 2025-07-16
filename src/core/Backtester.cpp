@@ -3,10 +3,14 @@
 #include "../../include/strategy/OrderBookImbalanceStrategy.h"
 #include "../../include/strategy/MLStrategyClassifier.h"
 #include "../../include/analytics/PerformanceForecaster.h"
-#include "strategy/PairsTradingStrategy.h" // Add include
+#include "strategy/PairsTradingStrategy.h"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <iomanip> // <-- FIX: Include for std::setprecision
+
+// FIX: Include the missing header for SimulatedExecutionHandler
+#include "../../include/execution/SimulatedExecutionHandler.h" 
 
 std::shared_ptr<Strategy> create_strategy_from_config(
     const nlohmann::json& config,
@@ -60,6 +64,8 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         data_config.value("start_date", ""),
         data_config.value("end_date", "")
     );
+    
+    analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
     for (const auto& strategy_config : config_["strategies"]) {
         try {
@@ -81,7 +87,6 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     
     execution_handler_ = std::make_shared<SimulatedExecutionHandler>(event_queue_, data_handler_);
     risk_manager_ = std::make_shared<RiskManager>(event_queue_, portfolio_, config_["risk"].value("risk_per_trade_pct", 0.01));
-    analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
     if (config_.contains("strategy_classifier")) {
         strategy_classifier_ = std::make_unique<MLStrategyClassifier>(
@@ -97,7 +102,9 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
 
     if (config_.contains("market_regime")) {
         auto regime_config = config_["market_regime"];
+        // FIX: Correctly call the constructor with event_queue_ first
         market_regime_detector_ = std::make_shared<MarketRegimeDetector>(
+            event_queue_,
             data_handler_,
             regime_config.value("symbol", "BTC/USDT"),
             regime_config.value("volatility_lookback", 20),
@@ -152,9 +159,10 @@ void Backtester::run_backtest() {
         data_handler_->updateBars();
         
         analytics_->detect_anomalies(data_handler_);
-
-        std::shared_ptr<Event> event;
-        while (event_queue_->try_pop(event)) {
+        
+        // FIX: Correctly use try_pop which returns an optional
+        while (auto opt_event = event_queue_->try_pop()) {
+            std::shared_ptr<Event> event = *opt_event.value();
             handleEvent(event);
             event_count++;
         }
@@ -256,10 +264,12 @@ void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
         case EventType::SIGNAL:
             risk_manager_->onSignal(static_cast<SignalEvent&>(*event));
             break;
-        case Event::ORDER:
+        // FIX: Use EventType::ORDER instead of Event::ORDER
+        case EventType::ORDER:
             execution_handler_->onOrder(static_cast<OrderEvent&>(*event));
             break;
-        case Event::FILL:
+        // FIX: Use EventType::FILL instead of Event::FILL
+        case EventType::FILL:
             portfolio_->onFill(static_cast<FillEvent&>(*event));
             break;
         case EventType::DATA_SOURCE_STATUS:
@@ -289,9 +299,10 @@ void Backtester::log_live_performance() {
             printf("  (No open positions)\n");
         } else {
             for (const auto& [symbol, pos] : positions) {
+                // FIX: Use OrderSide::BUY instead of OrderDirection::LONG
                 printf("  - %s: Quantity=%.4f, AvgCost=%.2f, Dir=%s\n",
                        symbol.c_str(), pos.quantity, pos.average_cost, 
-                       (pos.direction == OrderDirection::LONG ? "LONG" : "SHORT"));
+                       (static_cast<int>(pos.direction) == static_cast<int>(OrderSide::BUY) ? "BUY" : "SELL"));
             }
         }
         printf("--------------------------\n\n");
@@ -314,7 +325,7 @@ nlohmann::json Backtester::run_optimization() {
 
     nlohmann::json base_strategy_config;
     int strategy_idx = -1;
-    for (int i = 0; i < config_["strategies"].size(); ++i) {
+    for (size_t i = 0; i < config_["strategies"].size(); ++i) {
         if (config_["strategies"][i]["name"] == strategy_to_optimize) {
             base_strategy_config = config_["strategies"][i];
             strategy_idx = i;
@@ -330,11 +341,12 @@ nlohmann::json Backtester::run_optimization() {
     // This is a simplified grid search. A real implementation might be recursive
     // to handle any number of parameters.
     auto param_ranges = opt_config["param_ranges"];
-    for (double p1 = param_ranges["p1_start"]; p1 <= param_ranges["p1_end"]; p1 += param_ranges["p1_step"]) {
-        for (double p2 = param_ranges["p2_start"]; p2 <= param_ranges["p2_end"]; p2 += param_ranges["p2_step"]) {
+    // FIX: Use .get<double>() to extract numbers from JSON for calculations
+    for (double p1 = param_ranges["p1_start"].get<double>(); p1 <= param_ranges["p1_end"].get<double>(); p1 += param_ranges["p1_step"].get<double>()) {
+        for (double p2 = param_ranges["p2_start"].get<double>(); p2 <= param_ranges["p2_end"].get<double>(); p2 += param_ranges["p2_step"].get<double>()) {
             nlohmann::json params;
-            params[param_ranges["p1_name"]] = p1;
-            params[param_ranges["p2_name"]] = p2;
+            params[param_ranges["p1_name"].get<std::string>()] = p1;
+            params[param_ranges["p2_name"].get<std::string>()] = p2;
             parameter_sets.push_back(params);
         }
     }
@@ -433,7 +445,7 @@ void Backtester::run_walk_forward() {
         
         // Find strategy to optimize and set its params
         std::string strategy_to_optimize = config_["optimization"].value("strategy_to_optimize", "");
-        for (int j = 0; j < out_of_sample_config["strategies"].size(); ++j) {
+        for (size_t j = 0; j < out_of_sample_config["strategies"].size(); ++j) {
             if (out_of_sample_config["strategies"][j]["name"] == strategy_to_optimize) {
                 out_of_sample_config["strategies"][j]["params"] = best_params;
                 break;
@@ -457,7 +469,7 @@ void Backtester::run_walk_forward() {
         printf("Split %zu Return: %.2f%%\n", i + 1, out_of_sample_returns[i] * 100);
         total_return_sum += out_of_sample_returns[i];
     }
-    double avg_return = total_return_sum / out_of_sample_returns.size();
+    double avg_return = out_of_sample_returns.empty() ? 0 : total_return_sum / out_of_sample_returns.size();
     printf("\nAverage Out-of-Sample Return: %.2f%%\n", avg_return * 100);
     std::cout << "-------------------------------------\n";
 }

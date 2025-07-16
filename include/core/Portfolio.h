@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include "Performance.h"
 #include "../event/ThreadSafeQueue.h"
 #include "../data/DataTypes.h"
 #include "../data/DataHandler.h"
@@ -20,24 +21,16 @@ struct Position {
     OrderDirection direction = OrderDirection::NONE;
 };
 
-// Represents a completed trade for performance analysis.
-struct Trade {
-    std::string symbol;
-    OrderDirection direction;
-    double quantity;
-    double entry_price;
-    double exit_price;
-    double pnl;
-    std::string entry_timestamp;
-    std::string exit_timestamp;
-    MarketState market_state_at_entry;
-};
-
 class Portfolio {
 public:
     Portfolio(std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue, 
               double initial_capital, 
               std::shared_ptr<DataHandler> data_handler);
+
+    double get_cash() const;
+    double get_max_drawdown() const;
+    // Assuming Bar is a struct/class you have defined
+    std::vector<Bar> get_latest_bars(const std::string& symbol, int lookback) const;
 
     // --- Event Handlers ---
     void onSignal(const SignalEvent& signal);
@@ -53,7 +46,7 @@ public:
 
     // --- Getters ---
     double get_total_equity() const;
-    double getInitialCapital() const { return initial_capital; }
+    double getInitialCapital() const { return initial_capital_; }
     const std::vector<std::tuple<long long, double, MarketState>>& getEquityCurve() const;
     std::string getPositionDirection(const std::string& symbol) const;
     double get_position(const std::string& symbol) const;
@@ -67,19 +60,19 @@ public:
     Performance getRealTimePerformance() const;
 
 private:
-    double initial_capital;
-    double current_cash;
-    double total_equity;
-    double peak_equity;
-    double max_drawdown;
+    double initial_capital_;
+    double current_cash_;
+    double total_equity_;
+    double peak_equity_;
+    double max_drawdown_;
 
-    std::map<std::string, Position> holdings;
-    std::vector<std::tuple<long long, double, MarketState>> equity_curve;
-    std::vector<Trade> trade_log; 
+    std::map<std::string, Position> holdings_;
+    std::vector<std::tuple<long long, double, MarketState>> equity_curve_;
+    std::vector<Trade> trade_log_; 
     std::map<std::string, std::vector<Trade>> strategy_trade_log_;
 
-    std::shared_ptr<DataHandler> data_handler;
-    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue;
+    std::shared_ptr<DataHandler> data_handler_;
+    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
     MarketState current_market_state_;
 
     void generateTradeLevelReport() const;

@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <vector>
 #include <map>
+#include <WinSock2.h>
 #include <windows.h>
 #include <psapi.h>
 

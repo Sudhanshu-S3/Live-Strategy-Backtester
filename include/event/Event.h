@@ -6,8 +6,8 @@
 #include <chrono>
 #include "../data/DataTypes.h"
 
-enum class OrderDirection { BUY, SELL, NONE };
-enum class OrderType { MARKET, LIMIT };
+// enum class OrderDirection { BUY, SELL, NONE }; // REMOVED: Moved to DataTypes.h
+// enum class OrderType { MARKET, LIMIT }; // REMOVED: Already defined in DataTypes.h
 
 enum class EventType {
     MARKET, TRADE, ORDER_BOOK,
@@ -80,17 +80,19 @@ struct NewsEvent : public Event {
 };
 // Event sent from Portfolio to the ExecutionHandler
 struct OrderEvent : public Event {
-    std::string strategy_name;
     std::string symbol;
     long long timestamp;
-    OrderType order_type;
     OrderDirection direction;
-    long quantity;
-    double stop_loss; // To pass SL info to execution
+    double quantity;
+    OrderType order_type;
+    std::string strategy_name;
+    long order_id; // <-- ADD THIS LINE
 
-    OrderEvent(std::string strategy_name, std::string symbol, long long timestamp, OrderType order_type, OrderDirection direction, long quantity, double stop_loss = 0.0)
-        : strategy_name(std::move(strategy_name)), symbol(std::move(symbol)), timestamp(timestamp), order_type(order_type), direction(direction), quantity(quantity), stop_loss(stop_loss) {
+    OrderEvent(std::string symbol, long long timestamp, OrderDirection direction, double quantity, OrderType order_type, std::string strategy_name)
+        : symbol(std::move(symbol)), timestamp(timestamp), direction(direction), quantity(quantity), order_type(order_type), strategy_name(std::move(strategy_name)) {
         this->type = EventType::ORDER;
+        static long id_counter = 0;
+        this->order_id = ++id_counter;
     }
 };
 
@@ -128,6 +130,19 @@ struct MarketRegimeChangedEvent : public Event {
     MarketState new_state;
     MarketRegimeChangedEvent(const MarketState& state) : new_state(state) {
         type = EventType::MARKET_REGIME_CHANGED;
+    }
+};
+
+// STAGE 7: Event for failed/rejected orders
+struct OrderFailureEvent : public Event {
+    long long timestamp;
+    std::string symbol;
+    long order_id;
+    std::string reason;
+
+    OrderFailureEvent(long long ts, std::string sym, long id, std::string r)
+        : timestamp(ts), symbol(std::move(sym)), order_id(id), reason(std::move(r)) {
+        this->type = EventType::ORDER; // Or a new type if needed
     }
 };
 

@@ -72,6 +72,7 @@ private:
     std::shared_ptr<Analytics> analytics_;
     std::unique_ptr<MLStrategyClassifier> strategy_classifier_;
     std::unique_ptr<PerformanceForecaster> performance_forecaster_;
+    std::shared_ptr<MarketRegimeDetector> market_regime_detector_; // <-- FIX: Added this member
 
     std::atomic<bool> continue_backtest_{true};
     std::vector<std::thread> strategy_threads_;

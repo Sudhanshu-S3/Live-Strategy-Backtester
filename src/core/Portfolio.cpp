@@ -41,7 +41,7 @@ void Portfolio::onFill(const FillEvent& fill_event) {
     double old_quantity = position.quantity;
     if (fill_event.direction == OrderDirection::BUY) {
         position.quantity += fill_event.quantity;
-        position.direction = OrderDirection::LONG;
+        position.direction = OrderDirection::BUY;
         double old_total_cost = position.average_cost * old_quantity;
         position.average_cost = (old_total_cost + cost) / position.quantity;
     } else { // SELL
@@ -189,8 +189,8 @@ const std::vector<std::tuple<long long, double, MarketState>>& Portfolio::getEqu
 std::string Portfolio::getPositionDirection(const std::string& symbol) const {
     auto it = holdings_.find(symbol);
     if (it != holdings_.end()) {
-        if (it->second.direction == OrderDirection::LONG) return "LONG";
-        if (it->second.direction == OrderDirection::SHORT) return "SHORT";
+        if (it->second.direction == OrderDirection::BUY) return "LONG";
+        if (it->second.direction == OrderDirection::SELL) return "SHORT";
     }
     return "NONE";
 }

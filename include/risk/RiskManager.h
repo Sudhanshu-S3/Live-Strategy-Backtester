@@ -7,6 +7,7 @@
 #include "../event/ThreadSafeQueue.h"
 #include <memory>
 #include <string>
+#include <nlohmann/json.hpp> // <--- ADD THIS LINE
 
 struct RiskThresholds {
     double max_drawdown_pct;

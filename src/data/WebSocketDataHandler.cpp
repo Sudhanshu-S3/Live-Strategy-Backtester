@@ -57,7 +57,8 @@ void WebSocketDataHandler::on_message(websocketpp::connection_hdl hdl, client::m
 
             auto trade = std::make_shared<TradeEvent>(symbol, timestamp, price, quantity, side);
             trade->timestamp_received = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-            event_queue_->push(trade);
+            event_queue_->push(std::make_shared<std::shared_ptr<Event>>(std::static_pointer_cast<Event>(trade)));
+    
         }
         // Add parsers for other message types like order book updates here
     } catch (const nlohmann::json::parse_error& e) {
@@ -86,18 +87,19 @@ std::optional<Bar> WebSocketDataHandler::getLatestBar(const std::string& symbol)
     return std::nullopt;
 }
 
+// ... inside the WebSocketDataHandler::getLatestBarValue function
 double WebSocketDataHandler::getLatestBarValue(const std::string& symbol, const std::string& val_type) {
     auto it = latest_bars_map_.find(symbol);
     if (it != latest_bars_map_.end()) {
-        if (val_type == "price" || val_type == "close") return it->second.close_price;
-        if (val_type == "open") return it->second.open_price;
-        if (val_type == "high") return it->second.high_price;
-        if (val_type == "low") return it->second.low_price;
+        // CORRECT THE MEMBER NAMES HERE
+        if (val_type == "price" || val_type == "close") return it->second.close;
+        if (val_type == "open") return it->second.open;
+        if (val_type == "high") return it->second.high;
+        if (val_type == "low") return it->second.low;
         if (val_type == "volume") return it->second.volume;
     }
     return 0.0; // Or throw an exception
 }
-
 std::vector<Bar> WebSocketDataHandler::getLatestBars(const std::string& symbol, int n) {
     // This would require storing a history of bars. For now, returning latest if available.
     std::vector<Bar> bars;
@@ -106,4 +108,4 @@ std::vector<Bar> WebSocketDataHandler::getLatestBars(const std::string& symbol, 
         bars.push_back(it->second);
     }
     return bars;
-} 
+}

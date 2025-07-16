@@ -6,6 +6,7 @@
 #include <vector>
 #include <queue>
 #include <memory>
+#include <functional> // <-- Add this line
 #include "DataTypes.h"
 
 using namespace std;

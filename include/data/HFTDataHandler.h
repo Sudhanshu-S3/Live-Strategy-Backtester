@@ -4,6 +4,7 @@
 #include "data/DataHandler.h"
 #include "data/DataTypes.h"
 #include "../event/ThreadSafeQueue.h"
+#include "../event/Event.h"
 #include <fstream>
 #include <unordered_map>
 #include <vector>
@@ -26,6 +27,7 @@ public:
 
 class HFTDataHandler : public DataHandler {
 public:
+    // FIX: Changed queue to hold std::shared_ptr<Event> instead of raw Event*
     HFTDataHandler(std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
                    const std::vector<std::string>& symbols,
                    const std::string& trade_data_dir,
@@ -45,6 +47,13 @@ public:
     std::optional<OrderBook> getLatestOrderBook(const std::string& symbol) const override;
     const std::vector<std::string>& getSymbols() const override;
 
+    // <-- FIX: Implement the pure virtual function from DataHandler
+    void notifyOnNewData(std::function<void()> callback) override {
+        // This function body was missing, assuming a simple assignment.
+        // If there's a more complex logic, it should be implemented here.
+        on_new_data_ = callback;
+    }
+
     // STAGE 3: Accessors for strategies running in other threads
     OrderBook getLatestOrderBookNonOptional(const std::string& symbol);
     Trade getLatestTrade(const std::string& symbol);
@@ -59,6 +68,7 @@ public:
     void notifyNewData() { data_notification_cond_.notify_all(); }
 
 private:
+    // FIX: Changed queue to hold std::shared_ptr<Event> instead of raw Event*
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
     std::vector<std::string> symbols_;
     std::string trade_data_dir_;
@@ -67,6 +77,7 @@ private:
 
     std::unordered_map<std::string, std::vector<Trade>> all_trades_;
     std::unordered_map<std::string, std::vector<OrderBook>> all_orderbooks_;
+    std::map<std::string, OrderBook> latest_orderbooks_;
 
     std::unordered_map<std::string, size_t> trade_indices_;
     std::unordered_map<std::string, size_t> orderbook_indices_;
