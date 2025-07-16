@@ -1,0 +1,24 @@
+[submodule "lib/nlohmann"]
+	path = lib/nlohmann
+	url = https://github.com/nlohmann/json.git
+[submodule "lib/websocketpp"]
+	path = lib/websocketpp
+	url = https://github.com/zaphoyd/websocketpp.git
+[submodule "lib/asio"]
+	path = lib/asio
+	url = https://github.com/chriskohlhoff/asio.git
+[submodule "lib/mio"]
+	path = lib/mio
+	url = https://github.com/mandreyel/mio.git
+[submodule "lib/dlib"]
+	path = lib/dlib
+	url = https://github.com/davisking/dlib.git
+[submodule "lib/googletest"]
+	path = lib/googletest
+	url = https://github.com/google/googletest.git
+[submodule "lib/cpr"]
+	path = lib/cpr
+	url = https://github.com/libcpr/cpr.git
+[submodule "lib/zstd"]
+	path = lib/zstd
+	url = https://github.com/facebook/zstd.git
