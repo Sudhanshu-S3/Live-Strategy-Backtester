@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 # --- Configuration ---
 # Replace with your actual NewsAPI key
-NEWS_API_KEY = "YOUR_NEWS_API_KEY"
+NEWS_API_KEY = ""
 # The topic or stock you are interested in
 QUERY = "bitcoin" 
 # The symbol to tag this news with in your database

@@ -10,15 +10,26 @@
 // enum class OrderType { MARKET, LIMIT }; // REMOVED: Already defined in DataTypes.h
 
 enum class EventType {
-    MARKET, TRADE, ORDER_BOOK,
-    SIGNAL, ORDER, FILL, NEWS,
-    DATA_SOURCE_STATUS, MARKET_REGIME_CHANGED
+    MARKET,
+    SIGNAL,
+    ORDER,
+    FILL,
+    TRADE,
+    ORDER_BOOK,
+    MARKET_REGIME_CHANGED,
+    DATA_SOURCE_STATUS,
+    NEWS,  // Add this line
+    UNKNOWN // Add UNKNOWN type
 };
 
 struct Event {
-    virtual ~Event() = default;
     EventType type;
-    long long timestamp_received = 0; // Timestamp when the event was created/received by the system
+    long long timestamp_received = 0; // Add this field
+    
+    // Default constructor
+    Event() : type(EventType::UNKNOWN) {}
+    
+    virtual ~Event() = default;
 };
 
 struct MarketEvent : public Event {
@@ -40,16 +51,7 @@ struct TradeEvent : public Event {
 };
 
 // Event for new market data
-struct OrderBookEvent : public Event {
-    std::string symbol;
-    long long timestamp;
-    OrderBook book;
-
-    OrderBookEvent(const OrderBook& book)
-        : symbol(book.symbol), timestamp(book.timestamp), book(book) {
-        this->type = EventType::ORDER_BOOK;
-    }
-};
+#include "OrderBookEvent.h"
 
 // Event sent from a Strategy to the Portfolio
 struct SignalEvent : public Event {

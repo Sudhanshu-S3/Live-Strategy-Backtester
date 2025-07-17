@@ -56,8 +56,11 @@ struct Trade {
 
 // Represents a single level (price and quantity) in the order book.
 struct OrderBookLevel {
-    double price = 0.0;
-    double quantity = 0.0;
+    double price;
+    double quantity;
+    
+    // Make sure this constructor is defined
+    OrderBookLevel(double p, double q) : price(p), quantity(q) {}
 };
 
 // Represents a full snapshot of the order book at a point in time.

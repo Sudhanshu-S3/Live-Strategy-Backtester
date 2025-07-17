@@ -61,7 +61,43 @@ std::shared_ptr<Strategy> create_strategy_from_config(
 
 
 Backtester::Backtester(const nlohmann::json& config) : config_(config) {
-    std::string mode_str = config.value("run_mode", "BACKTEST");
+    // Ensure required configuration sections exist to prevent null value errors
+    if (!config_.contains("symbols") || !config_["symbols"].is_array() || config_["symbols"].empty()) {
+        throw std::runtime_error("Config error: 'symbols' must be a non-empty array");
+    }
+    
+    if (!config_.contains("data") || !config_["data"].is_object()) {
+        config_["data"] = {
+            {"start_date", "2025-07-13"},
+            {"end_date", "2025-07-14"},
+            {"trade_data_dir", "data"},
+            {"book_data_dir", "data"},
+            {"historical_data_fallback_dir", "historical_data"}
+        };
+    }
+    
+    if (!config_.contains("data_handler") || !config_["data_handler"].is_object()) {
+        config_["data_handler"] = {
+            {"live_host", "stream.binance.com"},
+            {"live_port", "9443"},
+            {"live_target", "/ws/btcusdt@trade"}
+        };
+    }
+    
+    if (!config_.contains("risk") || !config_["risk"].is_object()) {
+        config_["risk"] = {
+            {"risk_per_trade_pct", 0.01}
+        };
+    }
+    
+    if (!config_.contains("analytics") || !config_["analytics"].is_object()) {
+        config_["analytics"] = {
+            {"report_dir", "reports"}
+        };
+    }
+    
+    // Continue with the original constructor...
+    std::string mode_str = config_.value("run_mode", "BACKTEST");
     if (mode_str == "OPTIMIZATION") run_mode_ = RunMode::OPTIMIZATION;
     else if (mode_str == "WALK_FORWARD") run_mode_ = RunMode::WALK_FORWARD;
     else if (mode_str == "SHADOW") run_mode_ = RunMode::SHADOW;

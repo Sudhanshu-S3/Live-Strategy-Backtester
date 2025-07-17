@@ -50,6 +50,7 @@ set(PROJECT_SOURCES
     src/strategy/PairsTradingStrategy.cpp
     src/strategy/SimpleMovingAverageCrossover.cpp
     src/strategy/StrategyFactory.cpp
+    src/ui/ConsoleUI.cpp
 )
 
 # --- Executable ---

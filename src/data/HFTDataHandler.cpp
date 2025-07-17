@@ -90,10 +90,11 @@ void HFTDataHandler::updateBars() {
             event_to_push = event;
         }
     }
+    
     if (event_to_push) {
-        // FIX: Push the shared_ptr directly. This is safe and manages memory correctly.
-        // The original code (using .get() and .reset()) was buggy and would cause a crash.
+        // Fix: Just push event_to_push directly - it's already a shared_ptr<Event>
         event_queue_->push(std::make_shared<std::shared_ptr<Event>>(event_to_push));
+
     }
     notifyNewData();
 }

@@ -1,24 +1,37 @@
 {
-  "run_mode": "BACKTEST",
-  "initial_cash": 100000.0,
-  "symbols": ["BTCUSDT"],
+  "run_mode": "COMPARE",
+  "symbols": ["BTCUSDT", "ETHUSDT"],
+  "initial_capital": 100000.0,
+  "data": {
+    "start_date": "2025-07-13",
+    "end_date": "2025-07-14",
+    "trade_data_dir": "data",
+    "book_data_dir": "data",
+    "historical_data_fallback_dir": "historical_data"
+  },
   "data_handler": {
-    "type": "CSV",
-    "csv_dir": "./data/",
     "live_host": "stream.binance.com",
     "live_port": "9443",
     "live_target": "/ws/btcusdt@trade"
   },
+  "analytics": {
+    "report_dir": "reports",
+    "metrics": ["sharpe_ratio", "sortino_ratio", "max_drawdown", "win_rate"]
+  },
+  "risk": {
+    "risk_per_trade_pct": 0.01,
+    "max_drawdown_pct": 0.2,
+    "max_position_size": 0.1
+  },
   "strategies": [
     {
-      "name": "SimpleMovingAverageCrossover",
+      "name": "ORDER_BOOK_IMBALANCE",
+      "active": true,
+      "symbol": "BTCUSDT",
       "params": {
-        "short_window": 10,
-        "long_window": 30
+        "lookback_levels": 10,
+        "imbalance_threshold": 1.5
       }
     }
-  ],
-  "analytics": {
-    "risk_free_rate": 0.02
-  }
+  ]
 }

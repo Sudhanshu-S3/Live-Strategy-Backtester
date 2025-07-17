@@ -40,18 +40,39 @@ void OrderBookImbalanceStrategy::onMarketRegimeChanged(const MarketRegimeChanged
 }
 
 void OrderBookImbalanceStrategy::onOrderBook(const OrderBookEvent& event) {
-    if (event.symbol != symbol) return;
-
-    const OrderBook& book = event.book;
-
-    if (book.bids.empty() || book.asks.empty()) {
-        return;
+    // Fix accessing symbol_ instead of symbol
+    if (event.symbol_ != symbol) return;
+    
+    // There's no book member, we need to use the OrderBookEvent directly
+    // The bid_levels_ and ask_levels_ contain the order book data
+    
+    // Get the bid and ask levels from the event
+    const auto& bid_levels = event.bid_levels_;
+    const auto& ask_levels = event.ask_levels_;
+    
+    // Use the bid and ask levels directly instead of trying to access event.book
+    // Rest of your implementation...
+    
+    // Example implementation:
+    if (bid_levels.empty() || ask_levels.empty()) return;
+    
+    // Copy data for SIMD processing
+    size_t bid_size = std::min(static_cast<size_t>(lookback_levels_), bid_levels.size());
+    size_t ask_size = std::min(static_cast<size_t>(lookback_levels_), ask_levels.size());
+    
+    for (size_t i = 0; i < bid_size; i++) {
+        bid_prices_f[i] = static_cast<float>(bid_levels[i].price);
+        bid_qtys_f[i] = static_cast<float>(bid_levels[i].quantity);
     }
-
-    if (book.timestamp == last_update_timestamp_) {
-        return;
+    
+    for (size_t i = 0; i < ask_size; i++) {
+        ask_prices_f[i] = static_cast<float>(ask_levels[i].price);
+        ask_qtys_f[i] = static_cast<float>(ask_levels[i].quantity);
     }
-    last_update_timestamp_ = book.timestamp;
+    
+    // Calculate imbalance and generate signals as needed
+    double total_bid_volume = std::accumulate(bid_qtys_f.begin(), bid_qtys_f.begin() + bid_size, 0.0);
+    double total_ask_volume = std::accumulate(ask_qtys_f.begin(), ask_qtys_f.begin() + ask_size, 0.0);
 
     // Adjust threshold based on volatility
     double current_imbalance_threshold = base_imbalance_threshold_;
@@ -59,18 +80,6 @@ void OrderBookImbalanceStrategy::onOrderBook(const OrderBookEvent& event) {
         current_imbalance_threshold *= 1.5; // Require a stronger signal in high vol
     } else if (current_market_state_.volatility == VolatilityLevel::LOW) {
         current_imbalance_threshold *= 0.8; // Be more sensitive in low vol
-    }
-
-    double total_bid_volume = 0;
-    auto bid_it = book.bids.rbegin();
-    for(int i = 0; i < lookback_levels_ && bid_it != book.bids.rend(); ++i, ++bid_it) {
-        total_bid_volume += bid_it->second;
-    }
-
-    double total_ask_volume = 0;
-    auto ask_it = book.asks.begin();
-    for(int i = 0; i < lookback_levels_ && ask_it != book.asks.end(); ++i, ++ask_it) {
-        total_ask_volume += ask_it->second;
     }
 
     if (total_ask_volume > 1e-9) {
