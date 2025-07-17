@@ -4,7 +4,7 @@
 
 std::shared_ptr<Strategy> StrategyFactory::createStrategy(
     const nlohmann::json& strategy_config,
-    std::shared_ptr<EventQueue> event_queue,
+    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
     std::shared_ptr<DataHandler> data_handler)
 {
     std::string strategy_name = strategy_config["name"];

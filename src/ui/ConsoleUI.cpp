@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <iomanip>
+#include <limits>
 
 ConsoleUI::ConsoleUI() {
     loadConfig();
@@ -69,16 +70,18 @@ void ConsoleUI::saveConfig() {
 
 void ConsoleUI::displayMainMenu() {
     while (true) {
-        std::cout << "\n====== Live Strategy Backtester ======\n";
-        std::cout << "1. Run Backtest (Historical Data)\n";
-        std::cout << "2. Run Live Shadow Trading\n";
-        std::cout << "3. Compare Live vs. Backtest Performance\n";
-        std::cout << "4. Strategy Optimization\n";
-        std::cout << "5. Walk-Forward Analysis\n";
-        std::cout << "6. Monte Carlo Simulation\n";
-        std::cout << "7. Configure Settings\n";
-        std::cout << "8. Exit\n";
-        std::cout << "Select an option: ";
+    std::cout << "\n==================================================================================\n";
+    std::cout << "                          LIVE STRATEGY BACKTESTER                               \n";
+    std::cout << "==================================================================================\n\n";
+    std::cout << "1. Run Backtest (Historical Data)\n";
+    std::cout << "2. Run Live Shadow Trading\n";
+    std::cout << "3. Compare Live vs. Backtest Performance\n";
+    std::cout << "4. Strategy Optimization\n";
+    std::cout << "5. Walk-Forward Analysis\n";
+    std::cout << "6. Monte Carlo Simulation\n";
+    std::cout << "7. Configure Settings\n";
+    std::cout << "8. Exit\n";
+    std::cout << "Select an option: ";
 
         int choice;
         std::cin >> choice;
@@ -116,11 +119,32 @@ void ConsoleUI::displayMainMenu() {
     }
 }
 
+
+
+
 void ConsoleUI::runBacktest() {
     std::cout << "\n====== Historical Data Backtesting ======\n";
     
     nlohmann::json backtest_config = config_;
     backtest_config["run_mode"] = "BACKTEST";
+    
+    // Ensure data section exists
+    if (!backtest_config.contains("data") || !backtest_config["data"].is_object()) {
+        backtest_config["data"] = {
+            {"trade_data_dir", "data"},
+            {"book_data_dir", "data"},
+            {"historical_data_fallback_dir", "data"}
+        };
+    }
+    
+    // Check and update date range
+    if (!backtest_config["data"].contains("start_date") || backtest_config["data"]["start_date"].is_null()) {
+        backtest_config["data"]["start_date"] = "2025-07-13";
+    }
+    
+    if (!backtest_config["data"].contains("end_date") || backtest_config["data"]["end_date"].is_null()) {
+        backtest_config["data"]["end_date"] = "2025-07-14";
+    }
     
     try {
         std::cout << "Starting backtest with configuration:\n";
@@ -454,44 +478,69 @@ void ConsoleUI::configureStrategy() {
 }
 
 void ConsoleUI::configureDataSources() {
-    std::cout << "\n====== Data Source Configuration ======\n";
+    std::cout << "\n====== Data Sources Configuration ======\n";
     
-    // Configure historical data
-    std::cout << "Historical Data Configuration:\n";
-    std::cout << "Enter start date (YYYY-MM-DD): ";
-    std::string startDate;
-    std::getline(std::cin, startDate);
-    if (!startDate.empty()) config_["data"]["start_date"] = startDate;
+    // Ensure data section exists
+    if (!config_.contains("data")) {
+        config_["data"] = {};
+    }
     
-    std::cout << "Enter end date (YYYY-MM-DD): ";
-    std::string endDate;
-    std::getline(std::cin, endDate);
-    if (!endDate.empty()) config_["data"]["end_date"] = endDate;
+    std::cout << "Current settings:\n";
+    std::cout << "1. Start date: " << (config_["data"].contains("start_date") ? config_["data"]["start_date"].dump() : "not set") << "\n";
+    std::cout << "2. End date: " << (config_["data"].contains("end_date") ? config_["data"]["end_date"].dump() : "not set") << "\n";
+    std::cout << "3. Trade data directory: " << (config_["data"].contains("trade_data_dir") ? config_["data"]["trade_data_dir"].dump() : "not set") << "\n";
+    std::cout << "4. Order book data directory: " << (config_["data"].contains("book_data_dir") ? config_["data"]["book_data_dir"].dump() : "not set") << "\n";
+    std::cout << "5. Return to Configuration Menu\n";
+    std::cout << "Select an option: ";
     
-    std::cout << "Enter trade data directory (default: data): ";
-    std::string tradeDataDir;
-    std::getline(std::cin, tradeDataDir);
-    if (!tradeDataDir.empty()) config_["data"]["trade_data_dir"] = tradeDataDir;
+    int choice;
+    std::cin >> choice;
+    std::cin.ignore(); // Clear newline
     
-    // Configure live data
-    std::cout << "\nLive Data Configuration:\n";
-    std::cout << "Enter WebSocket host (default: stream.binance.com): ";
-    std::string host;
-    std::getline(std::cin, host);
-    if (!host.empty()) config_["data_handler"]["live_host"] = host;
-    
-    std::cout << "Enter WebSocket port (default: 9443): ";
-    std::string port;
-    std::getline(std::cin, port);
-    if (!port.empty()) config_["data_handler"]["live_port"] = port;
-    
-    std::cout << "Enter WebSocket target (default: /ws/btcusdt@trade): ";
-    std::string target;
-    std::getline(std::cin, target);
-    if (!target.empty()) config_["data_handler"]["live_target"] = target;
+    switch (choice) {
+        case 1: {
+            std::cout << "Enter start date (YYYY-MM-DD): ";
+            std::string startDate;
+            std::getline(std::cin, startDate);
+            if (!startDate.empty()) {
+                config_["data"]["start_date"] = startDate;
+            }
+            break;
+        }
+        case 2: {
+            std::cout << "Enter end date (YYYY-MM-DD): ";
+            std::string endDate;
+            std::getline(std::cin, endDate);
+            if (!endDate.empty()) {
+                config_["data"]["end_date"] = endDate;
+            }
+            break;
+        }
+        case 3: {
+            std::cout << "Enter trade data directory path: ";
+            std::string tradePath;
+            std::getline(std::cin, tradePath);
+            if (!tradePath.empty()) {
+                config_["data"]["trade_data_dir"] = tradePath;
+            }
+            break;
+        }
+        case 4: {
+            std::cout << "Enter order book data directory path: ";
+            std::string bookPath;
+            std::getline(std::cin, bookPath);
+            if (!bookPath.empty()) {
+                config_["data"]["book_data_dir"] = bookPath;
+            }
+            break;
+        }
+        case 5:
+            return;
+        default:
+            std::cout << "Invalid option. Please try again.\n";
+    }
     
     saveConfig();
-    std::cout << "Data source configuration updated.\n";
 }
 
 void ConsoleUI::configureRiskParameters() {

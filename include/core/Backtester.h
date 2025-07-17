@@ -62,17 +62,12 @@ private:
 
     nlohmann::json config_;
     RunMode run_mode_;
-    
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue_;
     std::shared_ptr<DataHandler> data_handler_;
     std::vector<std::shared_ptr<Strategy>> strategies_;
     std::shared_ptr<Portfolio> portfolio_;
     std::shared_ptr<ExecutionHandler> execution_handler_;
-    std::shared_ptr<RiskManager> risk_manager_;
-    std::shared_ptr<Analytics> analytics_;
-    std::unique_ptr<MLStrategyClassifier> strategy_classifier_;
-    std::unique_ptr<PerformanceForecaster> performance_forecaster_;
-    std::shared_ptr<MarketRegimeDetector> market_regime_detector_; // <-- FIX: Added this member
+    bool finished_ = true; // Add this line
 
     std::atomic<bool> continue_backtest_{true};
     std::vector<std::thread> strategy_threads_;
@@ -92,6 +87,12 @@ private:
     // Using custom allocator for time series data
     using BarVector = std::vector<Bar, PoolAllocator<Bar>>;
     std::unordered_map<std::string, BarVector> time_series_data_;
+
+    std::shared_ptr<Analytics> analytics_;
+    std::shared_ptr<RiskManager> risk_manager_;
+    std::unique_ptr<MLStrategyClassifier> strategy_classifier_;
+    std::unique_ptr<PerformanceForecaster> performance_forecaster_;
+    std::shared_ptr<MarketRegimeDetector> market_regime_detector_;
 };
 
 #endif // BACKTESTER_H

@@ -10,14 +10,15 @@
 #include "Strategy.h"
 #include "../event/Event.h" // <-- ADD THIS LINE
 
-using EventQueue = ThreadSafeQueue<std::shared_ptr<Event>>; // Ensure EventQueue is defined
+using EventQueuePtr = std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>>;
 
 class StrategyFactory {
 public:
     static std::shared_ptr<Strategy> createStrategy(
-        const nlohmann::json& strategy_config,
-        std::shared_ptr<EventQueue> event_queue,
-        std::shared_ptr<DataHandler> data_handler);
+        const nlohmann::json& config,
+        std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
+        std::shared_ptr<DataHandler> data_handler
+    );
 };
 
 #endif // STRATEGY_FACTORY_H

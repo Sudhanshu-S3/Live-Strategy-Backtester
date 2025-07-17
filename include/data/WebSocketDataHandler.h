@@ -96,7 +96,6 @@ private:
 
     // Add data storage for order books
     mutable std::unordered_map<std::string, OrderBook> latest_orderbooks_;
-<<<<<<< HEAD
 
     // Map to store orderbooks by symbol
     struct StoredOrderBook {
@@ -104,8 +103,8 @@ private:
         std::map<double, std::pair<double, double>> asks;
     };
     std::unordered_map<std::string, StoredOrderBook> orderbooks_;
-=======
->>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
+
+    std::string subscribe_message_;  // Add this line
 };
 
 #endif // WEBSOCKET_DATA_HANDLER_H

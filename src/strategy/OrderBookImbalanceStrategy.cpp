@@ -157,3 +157,44 @@ void OrderBookImbalanceStrategy::generate_signal(OrderDirection direction) {
               << " | Time: " << timestamp << std::endl;
 
 }
+
+void OrderBookImbalanceStrategy::onMarketRegimeChanged(const MarketRegimeChangedEvent& event) {
+    // First call the base class implementation
+    Strategy::onMarketRegimeChanged(event);
+    
+    // Then add any strategy-specific market regime handling
+    if (event.new_state.volatility == VolatilityLevel::HIGH) {
+        // Adjust thresholds for high volatility
+        imbalance_threshold_ = base_imbalance_threshold_ * 1.5;
+        std::cout << "Market regime changed to HIGH_VOLATILITY. Adjusted imbalance threshold to: " 
+                  << imbalance_threshold_ << std::endl;
+    } else if (event.new_state.volatility == VolatilityLevel::LOW) {
+        // Adjust thresholds for low volatility
+        imbalance_threshold_ = base_imbalance_threshold_ * 0.8;
+        std::cout << "Market regime changed to LOW_VOLATILITY. Adjusted imbalance threshold to: " 
+                  << imbalance_threshold_ << std::endl;
+    } else {
+        // Reset to base threshold for other states
+        imbalance_threshold_ = base_imbalance_threshold_;
+        
+        // Create a simple string representation without using marketStateToString
+        std::string volatility_str;
+        switch (event.new_state.volatility) {
+            case VolatilityLevel::LOW: volatility_str = "LOW"; break;
+            case VolatilityLevel::NORMAL: volatility_str = "NORMAL"; break;
+            case VolatilityLevel::HIGH: volatility_str = "HIGH"; break;
+            default: volatility_str = "UNKNOWN";
+        }
+        
+        std::string trend_str;
+        switch (event.new_state.trend) {
+            case TrendDirection::SIDEWAYS: trend_str = "SIDEWAYS"; break;
+            case TrendDirection::TRENDING_UP: trend_str = "UP"; break;
+            case TrendDirection::TRENDING_DOWN: trend_str = "DOWN"; break;
+            default: trend_str = "UNKNOWN";
+        }
+        
+        std::cout << "Market regime changed to Vol: " << volatility_str << ", Trend: " << trend_str
+                  << ". Reset to base imbalance threshold: " << imbalance_threshold_ << std::endl;
+    }
+}

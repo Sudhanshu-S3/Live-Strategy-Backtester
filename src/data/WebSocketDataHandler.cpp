@@ -1,4 +1,3 @@
-
 #include "../../include/data/WebSocketDataHandler.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -53,44 +52,39 @@ WebSocketDataHandler::~WebSocketDataHandler() {
 }
 
 void WebSocketDataHandler::connect() {
+    // Create a list of streams to subscribe to
+    nlohmann::json streams = nlohmann::json::array();
+    
+    for (const auto& symbol : symbols_) {
+        // Convert to lowercase
+        std::string symbol_lower = symbol;
+        std::transform(symbol_lower.begin(), symbol_lower.end(), symbol_lower.begin(),
+                      [](unsigned char c){ return std::tolower(c); });
+        
+        // Add streams for both depth (order book) and trade data
+        streams.push_back(symbol_lower + "@depth@100ms");
+        streams.push_back(symbol_lower + "@trade");
+    }
+    
+    // Set up the subscription message
+    subscribe_message_ = nlohmann::json({
+        {"method", "SUBSCRIBE"},
+        {"params", streams},
+        {"id", 1}
+    }).dump();
+    
     std::cout << "Connecting to WebSocket at " << host_ << ":" << port_ << target_ << std::endl;
-    finished_ = false;
-
-    // Disable the specific warning before resolver code
-    #if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wstringop-overflow"
-    #elif defined(_MSC_VER)
-    #pragma warning(push)
-    #pragma warning(disable: 4996)
-    #endif
-
-
-    // Look up the domain name
+    
+    // Resolve the host name and run the I/O context
     resolver_.async_resolve(
         host_,
         port_,
         beast::bind_front_handler(
             &WebSocketDataHandler::on_resolve,
             shared_from_this()));
-
-
-    // Re-enable warnings
-    #if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic pop
-    #elif defined(_MSC_VER)
-    #pragma warning(pop)
-    #endif
-
-    // Start the I/O context in its own thread
-    ioc_thread_ = std::thread([this](){ 
-        try {
-            ioc_.run(); 
-            std::cout << "WebSocket I/O context finished running." << std::endl;
-        } catch (const std::exception& e) {
-            std::cerr << "WebSocket I/O context exception: " << e.what() << std::endl;
-        }
-    });
+            
+    // Run the I/O context in a separate thread
+    ioc_thread_ = std::thread([this]() { ioc_.run(); });
 }
 
 void WebSocketDataHandler::stop() {

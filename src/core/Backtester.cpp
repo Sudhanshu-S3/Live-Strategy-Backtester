@@ -15,6 +15,20 @@
 #include "../../include/analytics/PerformanceForecaster.h"
 #include "strategy/PairsTradingStrategy.h"
 #include "../../include/execution/SimulatedExecutionHandler.h"
+#include "../../include/strategy/StrategyFactory.h" // Add this near the top with other includes
+
+// Safe JSON value extraction helper function to add
+template<typename T>
+T safe_get_value(const nlohmann::json& j, const std::string& key, const T& default_value) {
+    if (j.contains(key)) {
+        try {
+            return j[key].get<T>();
+        } catch (...) {
+            return default_value;
+        }
+    }
+    return default_value;
+}
 
 // ... (the create_strategy_from_config function remains unchanged) ...
 std::shared_ptr<Strategy> create_strategy_from_config(
@@ -25,9 +39,11 @@ std::shared_ptr<Strategy> create_strategy_from_config(
     std::string name = config.value("name", "");
     if (name == "ORDER_BOOK_IMBALANCE") {
         auto params = config["params"];
+        int lookback_levels = params.contains("lookback_levels") ? params["lookback_levels"].get<int>() : 10;
+        double imbalance_threshold = params.contains("imbalance_threshold") ? params["imbalance_threshold"].get<double>() : 1.5;
         return std::make_shared<OrderBookImbalanceStrategy>(
             event_queue, data_handler, config.value("symbol", ""),
-            params.value("lookback_levels", 10), params.value("imbalance_threshold", 1.5)
+            lookback_levels, imbalance_threshold
         );
     } else if (name == "PAIRS_TRADING") {
         auto params = config["params"];
@@ -113,25 +129,37 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         
         // Use the "data_handler" section from config as recommended
         const auto& dh_config = config_["data_handler"]; 
-<<<<<<< HEAD
-        std::string host = dh_config.contains("live_host") ? dh_config["live_host"].get<std::string>() : "";
-        
-        // Fix port handling
-        std::string port;
-        if (dh_config.contains("live_port")) {
-            if (dh_config["live_port"].is_number()) {
-                port = std::to_string(dh_config["live_port"].get<int>());
-            } else if (dh_config["live_port"].is_string()) {
-                port = dh_config["live_port"].get<std::string>();
-            }
-        }
 
-        std::string target = dh_config.contains("live_target") ? dh_config["live_target"].get<std::string>() : "";
-=======
-        std::string host = dh_config.value("live_host", "");
-        std::string port = dh_config.value("live_port", "");
-        std::string target = dh_config.value("live_target", "");
->>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
+        std::string host;
+if (dh_config.contains("live_host") && !dh_config["live_host"].is_null()) {
+    host = dh_config["live_host"].get<std::string>();
+} else {
+    host = "stream.binance.com";  // Default to Binance's WebSocket server
+    std::cout << "Using default WebSocket host: " << host << std::endl;
+}
+
+// Fix port handling
+std::string port;
+if (dh_config.contains("live_port") && !dh_config["live_port"].is_null()) {
+    if (dh_config["live_port"].is_number()) {
+        port = std::to_string(dh_config["live_port"].get<int>());
+    } else if (dh_config["live_port"].is_string()) {
+        port = dh_config["live_port"].get<std::string>();
+    }
+}
+if (port.empty()) {
+    port = "9443";  // Default WebSocket port for Binance
+    std::cout << "Using default WebSocket port: " << port << std::endl;
+}
+
+std::string target;
+if (dh_config.contains("live_target") && !dh_config["live_target"].is_null()) {
+    target = dh_config["live_target"].get<std::string>();
+} else {
+    target = "/ws";  // Default WebSocket path
+    std::cout << "Using default WebSocket target: " << target << std::endl;
+}
+
 
         if (host.empty() || port.empty() || target.empty()) {
             throw std::runtime_error("Config error: 'live_host', 'live_port', and 'live_target' must be set in 'data_handler' for live mode.");
@@ -145,11 +173,9 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
             port,
             target
         );
-<<<<<<< HEAD
+
         ws_handler->connect(); // Start the connection
-=======
-        ws_handler->connect(); // IMPORTANT: Start the connection
->>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
+
         data_handler_ = ws_handler;
 
     } else { // Default to historical data handling for BACKTEST, OPTIMIZATION, etc.
@@ -159,11 +185,11 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         auto data_config = config_["data"]; 
         data_handler_ = std::make_shared<HFTDataHandler>(
             event_queue_, symbols,
-            data_config.value("trade_data_dir", ""),
-            data_config.value("book_data_dir", ""),
-            data_config.value("historical_data_fallback_dir", ""),
-            data_config.value("start_date", ""),
-            data_config.value("end_date", "")
+            safe_get_value<std::string>(data_config, "trade_data_dir", ""),
+            safe_get_value<std::string>(data_config, "book_data_dir", ""),
+            safe_get_value<std::string>(data_config, "historical_data_fallback_dir", ""),
+            safe_get_value<std::string>(data_config, "start_date", ""),
+            safe_get_value<std::string>(data_config, "end_date", "")
         );
     }
     // --- MODIFICATION END ---
@@ -250,6 +276,37 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     last_risk_check_time_ = std::chrono::steady_clock::now();
     resource_check_interval_ms_ = config_.value("resource_check_interval_ms", 5000); // Default 5s
     last_resource_check_time_ = std::chrono::steady_clock::now();
+
+    // --- MODIFICATION START: Initialize strategies from config ---
+    if (config_.contains("strategies") && config_["strategies"].is_array()) {
+        for (const auto& strategy_config : config_["strategies"]) {
+            std::string strategy_name = strategy_config.value("name", "DEFAULT");
+            std::cout << "Initializing strategy: " << strategy_name << std::endl;
+            
+            // Use StrategyFactory instead of direct Strategy instantiation
+            auto strategy = StrategyFactory::createStrategy(
+                strategy_config,
+                event_queue_,
+                data_handler_
+            );
+            
+            strategies_.push_back(strategy);
+        }
+    } else if (config_.contains("strategy")) {
+        // Handle legacy single strategy config
+        std::string strategy_name = config_["strategy"].value("name", "DEFAULT");
+        std::cout << "Initializing strategy: " << strategy_name << std::endl;
+        
+        // Use StrategyFactory instead of direct Strategy instantiation
+        auto strategy = StrategyFactory::createStrategy(
+            config_["strategy"],
+            event_queue_,
+            data_handler_
+        );
+        
+        strategies_.push_back(strategy);
+    }
+    // --- MODIFICATION END ---
 }
 
 // ... (The rest of the Backtester.cpp file remains unchanged) ...
@@ -271,6 +328,47 @@ void Backtester::run() {
         default:
             run_backtest();
             break;
+    }
+
+    if (run_mode_ == RunMode::SHADOW) {
+        // For live trading, we need to process data as it comes in
+        try {
+            // Check if the data handler has already been initialized
+            auto ws_handler = std::dynamic_pointer_cast<WebSocketDataHandler>(data_handler_);
+            if (ws_handler) {
+                // Set up a callback to process new data
+                ws_handler->setOnNewDataCallback([this]() {
+                    // Process any events in the queue
+                    std::shared_ptr<Event> event;
+                    // Replace event_queue_->empty() with a check using try_pop
+                    while (auto event_opt = event_queue_->try_pop()) {
+                        std::shared_ptr<Event> event = *event_opt.value();  // Dereference to get the inner shared_ptr
+                        if (event) {
+                            this->handleEvent(event);
+                        }
+                    }
+                    
+                    // Log current performance periodically
+                    static auto last_log = std::chrono::steady_clock::now();
+                    auto now = std::chrono::steady_clock::now();
+                    if (std::chrono::duration_cast<std::chrono::seconds>(now - last_log).count() >= 5) {
+                        log_live_performance();
+                        last_log = now;
+                    }
+                });
+                
+                // Keep the program running until externally stopped
+                finished_ = false;
+                while (!finished_) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error in live trading loop: " << e.what() << std::endl;
+        }
+    } else {
+        // Original backtest logic remains unchanged
+        run_backtest();
     }
 }
 

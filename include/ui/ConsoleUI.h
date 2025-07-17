@@ -9,6 +9,7 @@ class ConsoleUI {
 public:
     ConsoleUI();
     void displayMainMenu();
+    void run(); // Declaring the run() method
 
 private:
     void loadConfig();
