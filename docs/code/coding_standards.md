@@ -376,6 +376,3 @@ doxygen Doxyfile
 open docs/html/index.html
 ```
 
-```
-
-```

@@ -182,6 +182,3 @@ The system is designed to be extended in several ways:
 - GPU acceleration for machine learning components
 - Cloud integration for data storage and processing
 
-```
-
-```

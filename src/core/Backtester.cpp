@@ -170,7 +170,6 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     
     analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
-<<<<<<< HEAD
     // Ensure strategies array exists
     if (!config_.contains("strategies") || !config_["strategies"].is_array()) {
         std::cout << "No strategies found in config, creating a default strategy for live trading" << std::endl;
@@ -196,8 +195,7 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         }
     }
 
-=======
->>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
+
     for (const auto& strategy_config : config_["strategies"]) {
         try {
             if (strategy_config.value("active", false)) {

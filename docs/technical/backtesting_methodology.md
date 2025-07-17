@@ -219,7 +219,3 @@ When analyzing backtest results, consider:
 5. Compare performance to appropriate benchmarks
 6. Consider both quantitative metrics and qualitative behavior
 7. Be skeptical of exceptional performance - validate thoroughly
-
-```
-
-```
