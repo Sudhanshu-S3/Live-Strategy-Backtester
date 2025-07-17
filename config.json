@@ -1,0 +1,27 @@
+{
+  "initial_capital": 100000.0,
+  "symbols": ["BTCUSDT", "ETHUSDT"],
+  "run_mode": "SHADOW",
+  "data_handler": {
+    "live_host": "stream.binance.com",
+    "live_port": "9443",
+    "live_target": "/ws/btcusdt@depth@100ms"
+  },
+  "strategies": [
+    {
+      "name": "ORDER_BOOK_IMBALANCE",
+      "symbol": "BTCUSDT",
+      "active": true,
+      "params": {
+        "lookback_levels": 10,
+        "imbalance_threshold": 1.5
+      }
+    }
+  ],
+  "risk": {
+    "risk_per_trade_pct": 0.01
+  },
+  "analytics": {
+    "report_dir": "reports"
+  }
+}

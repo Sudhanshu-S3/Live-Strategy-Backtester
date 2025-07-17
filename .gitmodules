@@ -1,0 +1,12 @@
+[submodule "lib/mio"]
+	path = lib/mio
+	url = https://github.com/mandreyel/mio.git
+[submodule "lib/dlib"]
+	path = lib/dlib
+	url = https://github.com/davisking/dlib.git
+[submodule "lib/cpr"]
+	path = lib/cpr
+	url = https://github.com/libcpr/cpr.git
+[submodule "lib/zstd"]
+	path = lib/zstd
+	url = https://github.com/facebook/zstd.git
