@@ -1,4 +1,5 @@
 #include "../../include/ui/ConsoleUI.h"
+#include "../../include/config/AppConfig.h"
 #include "../../include/core/Backtester.h"
 #include "../../include/core/Optimizer.h"
 #include "../../include/core/WalkForwardAnalyzer.h"
@@ -19,14 +20,57 @@ ConsoleUI::ConsoleUI() {
 
 void ConsoleUI::loadConfig() {
     try {
-        std::ifstream config_file("config.json");
-        if (!config_file.is_open()) {
-            throw std::runtime_error("Could not open config.json");
+        // Use the type-safe AppConfig loader
+        AppConfig config = AppConfig::loadFromFile("config.json");
+        
+        // Convert to the internal JSON format if needed for backward compatibility
+        config_ = nlohmann::json();
+        config_["run_mode"] = AppConfig::runModeToString(config.run_mode);
+        config_["symbols"] = config.symbols;
+        config_["initial_capital"] = config.initial_capital;
+        
+        config_["data"] = {
+            {"start_date", config.data.start_date},
+            {"end_date", config.data.end_date},
+            {"trade_data_dir", config.data.trade_data_dir},
+            {"book_data_dir", config.data.book_data_dir},
+            {"historical_data_fallback_dir", config.data.historical_data_fallback_dir}
+        };
+        
+        config_["strategies"] = nlohmann::json::array();
+        for (const auto& strategy : config.strategies) {
+            nlohmann::json strategy_json = {
+                {"name", strategy.name},
+                {"symbol", strategy.symbol},
+                {"active", strategy.active},
+                {"params", {
+                    {"lookback_levels", strategy.params.lookback_levels},
+                    {"imbalance_threshold", strategy.params.imbalance_threshold}
+                }}
+            };
+            config_["strategies"].push_back(strategy_json);
         }
-        config_ = nlohmann::json::parse(config_file);
+        
+        // Also store the first strategy as a top-level field for backward compatibility
+        if (!config.strategies.empty()) {
+            config_["strategy"] = config.strategies[0].name;
+        }
+        
+        config_["websocket"] = {
+            {"host", config.websocket.host},
+            {"port", config.websocket.port},
+            {"target", config.websocket.target}
+        };
+        
+        config_["risk"] = {
+            {"risk_per_trade_pct", config.risk.risk_per_trade_pct},
+            {"max_drawdown_pct", config.risk.max_drawdown_pct}
+        };
+        
     } catch (const std::exception& e) {
         std::cerr << "Configuration Error: " << e.what() << std::endl;
         std::cerr << "Using default configuration." << std::endl;
+        
         // Create a minimal default configuration
         config_ = {
             {"run_mode", "BACKTEST"},
@@ -39,17 +83,11 @@ void ConsoleUI::loadConfig() {
                 {"book_data_dir", "data"},
                 {"historical_data_fallback_dir", "historical_data"}
             }},
-            {"data_handler", {
-                {"live_host", "stream.binance.com"},
-                {"live_port", "9443"},
-                {"live_target", "/ws/btcusdt@trade"}
-            }},
-            {"risk", {
-                {"risk_per_trade_pct", 0.01}
-            }},
-            {"strategies", {
-                {{"name", "ORDER_BOOK_IMBALANCE"}, {"active", true}, {"symbol", "BTCUSDT"}, 
-                 {"params", {{"lookback_levels", 10}, {"imbalance_threshold", 1.5}}}}
+            {"strategy", "ORDER_BOOK_IMBALANCE"},
+            {"websocket", {
+                {"host", "stream.binance.com"},
+                {"port", 9443},
+                {"target", "/ws"}
             }}
         };
     }
@@ -57,12 +95,44 @@ void ConsoleUI::loadConfig() {
 
 void ConsoleUI::saveConfig() {
     try {
-        std::ofstream config_file("config.json");
-        if (!config_file.is_open()) {
-            throw std::runtime_error("Could not open config.json for writing");
+        // Convert the internal JSON format to AppConfig
+        AppConfig config;
+        
+        if (config_.contains("run_mode") && config_["run_mode"].is_string()) {
+            config.run_mode = AppConfig::stringToRunMode(config_["run_mode"]);
         }
-        config_file << std::setw(4) << config_ << std::endl;
-        std::cout << "Configuration saved successfully." << std::endl;
+        
+        if (config_.contains("symbols") && config_["symbols"].is_array()) {
+            for (const auto& symbol : config_["symbols"]) {
+                config.symbols.push_back(symbol);
+            }
+        }
+        
+        if (config_.contains("initial_capital") && config_["initial_capital"].is_number()) {
+            config.initial_capital = config_["initial_capital"];
+        }
+        
+        // Convert strategies
+        if (config_.contains("strategies") && config_["strategies"].is_array()) {
+            for (const auto& strategy_json : config_["strategies"]) {
+                StrategyConfig strategy;
+                strategy.name = strategy_json.value("name", "");
+                strategy.symbol = strategy_json.value("symbol", "");
+                strategy.active = strategy_json.value("active", true);
+                
+                if (strategy_json.contains("params") && strategy_json["params"].is_object()) {
+                    auto params = strategy_json["params"];
+                    strategy.params.lookback_levels = params.value("lookback_levels", 10);
+                    strategy.params.imbalance_threshold = params.value("imbalance_threshold", 1.5);
+                }
+                
+                config.strategies.push_back(strategy);
+            }
+        }
+        
+        // Save using the type-safe method
+        config.saveToFile("config.json");
+        
     } catch (const std::exception& e) {
         std::cerr << "Error saving configuration: " << e.what() << std::endl;
     }

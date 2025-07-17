@@ -56,9 +56,24 @@ double calculate_correlation(const std::vector<double>& pnl1, const std::vector<
 }
 
 
-Analytics::Analytics(const nlohmann::json& analytics_config) {
-    enable_cross_correlation_ = analytics_config.value("enable_cross_correlation", false);
-    anomaly_z_score_threshold_ = analytics_config.value("anomaly_detection_z_score", 3.0);
+Analytics::Analytics(const nlohmann::json& config) : config_(config) {
+    // Initialize analytics components based on config
+    if (config.contains("performance")) {
+        // ... existing code ...
+    }
+
+    if (config.contains("sharpe_ratio")) {
+        auto sharpe_config = config["sharpe_ratio"];
+        double risk_free_rate = sharpe_config.value("risk_free_rate", 0.02);
+        sharpe_ratio_ = std::make_unique<SharpeRatio>(risk_free_rate);
+    } else {
+        // Default initialization if not in config
+        sharpe_ratio_ = std::make_unique<SharpeRatio>(0.02);
+    }
+    
+    if (config.contains("drawdown")) {
+        // ... existing code ...
+    }
 }
 
 void Analytics::generateReport(std::shared_ptr<Portfolio> portfolio) {

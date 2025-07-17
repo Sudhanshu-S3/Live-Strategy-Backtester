@@ -43,6 +43,7 @@ set(PROJECT_SOURCES
     src/data/WebSocketDataHandler.cpp
     src/execution/SimulatedExecutionHandler.cpp
     src/risk/RiskManager.cpp
+    src/risk/SharpeRatio.cpp
     src/strategy/MarketRegimeDetector.cpp
     src/strategy/MLStrategyClassifier.cpp
     src/strategy/NewsSentimentStrategy.cpp
@@ -53,8 +54,13 @@ set(PROJECT_SOURCES
     src/ui/ConsoleUI.cpp
 )
 
+# --- Add the new source files
+set(CONFIG_SOURCES
+    src/config/AppConfig.cpp
+)
+
 # --- Executable ---
-add_executable(backtester ${PROJECT_SOURCES})
+add_executable(backtester ${PROJECT_SOURCES} ${CONFIG_SOURCES})
 
 # --- Include Directories ---
 target_include_directories(backtester PUBLIC
@@ -95,3 +101,12 @@ endif()
 
 # --- Installation ---
 install(TARGETS backtester DESTINATION bin)
+
+# Add the ConfigValidator tool
+add_executable(config_validator src/tools/ConfigValidator.cpp)
+target_link_libraries(config_validator PRIVATE nlohmann_json::nlohmann_json)
+target_include_directories(config_validator PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+
+# If you need to link against other backtester code objects, do something like this:
+# target_link_libraries(strategy_tester PRIVATE backtester_core)

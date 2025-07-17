@@ -10,7 +10,7 @@ PairsTradingStrategy::PairsTradingStrategy(
     const std::string& symbol_b,
     int window,
     double z_score_threshold
-) : Strategy(event_queue, data_handler, name, symbol_a), // Note: base strategy is for one symbol
+) : Strategy(event_queue, data_handler, name, symbol_a), // Pass name to base Strategy
     symbol_a_(symbol_a),
     symbol_b_(symbol_b),
     window_(window),

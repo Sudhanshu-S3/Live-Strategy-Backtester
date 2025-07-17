@@ -1,30 +1,29 @@
 #ifndef BACKTESTER_H
 #define BACKTESTER_H
 
-#include <vector>
 #include <string>
+#include <vector>
 #include <memory>
-#include <queue>
-#include <thread>
 #include <chrono>
-#include <atomic>
 #include <nlohmann/json.hpp>
-#include <unordered_map>
+#include <thread>
+#include <atomic>
+#include <unordered_map> // Add this for std::unordered_map
 
-#include "event/Event.h"
-#include "event/ThreadSafeQueue.h"
-#include "data/DataHandler.h"
-#include "strategy/Strategy.h"
-#include "core/Portfolio.h"
-#include "execution/ExecutionHandler.h"
-#include "risk/RiskManager.h"
-#include "analytics/Analytics.h"
-#include "strategy/MarketRegimeDetector.h"
-#include "strategy/MLStrategyClassifier.h"
-#include "analytics/PerformanceForecaster.h"
-#include "CustomAllocator.h"
+#include "../data/DataHandler.h"
+#include "../event/Event.h"
+#include "../strategy/Strategy.h"
+#include "../execution/ExecutionHandler.h"
+#include "Portfolio.h"
+#include "../event/ThreadSafeQueue.h"
+#include "../config/AppConfig.h"
+#include "../risk/RiskManager.h"
+#include "../analytics/Analytics.h"
+// Add these three includes
+#include "../core/CustomAllocator.h"
+#include "../strategy/MLStrategyClassifier.h"
+#include "../analytics/PerformanceForecaster.h"
 
-enum class RunMode { BACKTEST, SHADOW, OPTIMIZATION, WALK_FORWARD };
 
 class Backtester {
 public:

@@ -36,43 +36,53 @@ std::shared_ptr<Strategy> create_strategy_from_config(
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
     std::shared_ptr<DataHandler> data_handler
 ) {
-    std::string name = config.value("name", "");
+    std::string name = config.contains("name") ? config["name"].get<std::string>() : "";
+    
+    // Safely access params
+    nlohmann::json params = nlohmann::json::object();
+    if (config.contains("params") && config["params"].is_object()) {
+        params = config["params"];
+    }
+
     if (name == "ORDER_BOOK_IMBALANCE") {
-        auto params = config["params"];
-        int lookback_levels = params.contains("lookback_levels") ? params["lookback_levels"].get<int>() : 10;
-        double imbalance_threshold = params.contains("imbalance_threshold") ? params["imbalance_threshold"].get<double>() : 1.5;
+        // Safely get parameters with type checking
+        int lookback_levels = 10;
+        if (params.contains("lookback_levels") && params["lookback_levels"].is_number()) {
+            lookback_levels = params["lookback_levels"].get<int>();
+        }
+        
+        double imbalance_threshold = 1.5;
+        if (params.contains("imbalance_threshold") && params["imbalance_threshold"].is_number()) {
+            imbalance_threshold = params["imbalance_threshold"].get<double>();
+        }
+        
         return std::make_shared<OrderBookImbalanceStrategy>(
             event_queue, data_handler, config.value("symbol", ""),
             lookback_levels, imbalance_threshold
         );
     } else if (name == "PAIRS_TRADING") {
-        auto params = config["params"];
-        auto symbols = config["symbols"].get<std::vector<std::string>>();
-        if (symbols.size() >= 3) {  // Make sure we have enough symbols
-            return std::make_shared<PairsTradingStrategy>(
-                event_queue, 
-                data_handler, 
-                symbols[0],  // First symbol
-                symbols[1],  // Second symbol
-                symbols[2],  // Third symbol (possibly for benchmark)
-                params.value("lookback", 50),
-                params.value("entry_z", 2.0)
-            );
-        } else {
-            throw std::runtime_error("PairsTradingStrategy requires at least 3 symbols");
+        auto symbols = config.value("symbols", std::vector<std::string>());
+        if (symbols.size() < 2) {
+            throw std::runtime_error("PairsTradingStrategy requires at least 2 symbols.");
         }
-    } else if (name == "MARKET_REGIME_DETECTOR") {
-        auto params = config["params"];
-        return std::make_shared<MarketRegimeDetector>(
-            event_queue, data_handler, config.value("symbol", ""),
-            params.value("volatility_lookback", 20),
-            params.value("trend_lookback", 50),
-            params.value("high_vol_threshold", 0.02),
-            params.value("low_vol_threshold", 0.005),
-            params.value("trend_threshold_pct", 0.5)
+        
+        // CORRECT WAY: Apply the same fix here for safety.
+        int window = params.value("window", 50);
+        double z_score_threshold = params.value("z_score_threshold", 2.0);
+
+        return std::make_shared<PairsTradingStrategy>(
+            event_queue, 
+            data_handler, 
+            name,
+            symbols[0],
+            symbols[1],
+            window,
+            z_score_threshold
         );
     }
-    throw std::runtime_error("Unknown strategy name in config: " + name);
+    // Add other strategies here...
+    
+    throw std::runtime_error("Unknown or unsupported strategy type: " + name);
 }
 
 
@@ -124,60 +134,174 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
 
     // --- MODIFICATION START: Conditional Data Handler Creation ---
     // This block replaces the original hardcoded HFTDataHandler creation.
-    if (run_mode_ == RunMode::SHADOW) { // Or add other live modes like `run_mode_ == RunMode::LIVE`
+    if (run_mode_ == RunMode::SHADOW) {
         std::cout << "Initializing WebSocketDataHandler for live session." << std::endl;
         
-        // Use the "data_handler" section from config as recommended
-        const auto& dh_config = config_["data_handler"]; 
-
-        std::string host;
-if (dh_config.contains("live_host") && !dh_config["live_host"].is_null()) {
-    host = dh_config["live_host"].get<std::string>();
-} else {
-    host = "stream.binance.com";  // Default to Binance's WebSocket server
-    std::cout << "Using default WebSocket host: " << host << std::endl;
-}
-
-// Fix port handling
-std::string port;
-if (dh_config.contains("live_port") && !dh_config["live_port"].is_null()) {
-    if (dh_config["live_port"].is_number()) {
-        port = std::to_string(dh_config["live_port"].get<int>());
-    } else if (dh_config["live_port"].is_string()) {
-        port = dh_config["live_port"].get<std::string>();
-    }
-}
-if (port.empty()) {
-    port = "9443";  // Default WebSocket port for Binance
-    std::cout << "Using default WebSocket port: " << port << std::endl;
-}
-
-std::string target;
-if (dh_config.contains("live_target") && !dh_config["live_target"].is_null()) {
-    target = dh_config["live_target"].get<std::string>();
-} else {
-    target = "/ws";  // Default WebSocket path
-    std::cout << "Using default WebSocket target: " << target << std::endl;
-}
-
-
-        if (host.empty() || port.empty() || target.empty()) {
-            throw std::runtime_error("Config error: 'live_host', 'live_port', and 'live_target' must be set in 'data_handler' for live mode.");
+        // Create default data_handler if missing
+        if (!config_.contains("data_handler") || config_["data_handler"].is_null()) {
+            config_["data_handler"] = nlohmann::json::object();
         }
-
-        // Create and connect the WebSocketDataHandler
-        auto ws_handler = std::make_shared<WebSocketDataHandler>(
+        
+        const auto& dh_config = config_["data_handler"];
+        
+        // Get host with safe default
+        std::string host = "stream.binance.com";  // Default value
+        if (dh_config.contains("live_host") && !dh_config["live_host"].is_null()) {
+            host = dh_config["live_host"].get<std::string>();
+        } else {
+            std::cout << "Using default WebSocket host: " << host << std::endl;
+        }
+        
+        // Get port with safe default
+        std::string port = "9443";  // Default value
+        if (dh_config.contains("live_port") && !dh_config["live_port"].is_null()) {
+            if (dh_config["live_port"].is_number()) {
+                port = std::to_string(dh_config["live_port"].get<int>());
+            } else if (dh_config["live_port"].is_string()) {
+                port = dh_config["live_port"].get<std::string>();
+            }
+        } else {
+            std::cout << "Using default WebSocket port: " << port << std::endl;
+        }
+        
+        // Get target with safe default
+        std::string target = "/ws";  // Default value
+        if (dh_config.contains("live_target") && !dh_config["live_target"].is_null()) {
+            target = dh_config["live_target"].get<std::string>();
+        } else {
+            std::cout << "Using default WebSocket target: " << target << std::endl;
+        }
+        
+        // Create and connect the WebSocketDataHandler with guaranteed valid values
+        data_handler_ = std::make_shared<WebSocketDataHandler>(
             event_queue_,
             symbols,
             host,
             port,
             target
         );
+        
+        // Save the updated config back (has the default values now)
+        config_["data_handler"]["live_host"] = host;
+        config_["data_handler"]["live_port"] = port;
+        config_["data_handler"]["live_target"] = target;
+        
+        // Connect to the WebSocket
+        std::static_pointer_cast<WebSocketDataHandler>(data_handler_)->connect();
+        
+        analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
-        ws_handler->connect(); // Start the connection
+        // Ensure strategies array exists
+        if (!config_.contains("strategies") || !config_["strategies"].is_array()) {
+            std::cout << "No strategies found in config, creating a default strategy for live trading" << std::endl;
+            
+            // Create a default strategy for the first symbol
+            if (!config_["symbols"].empty()) {
+                std::string first_symbol = config_["symbols"][0];
+                
+                // Create a default strategy configuration
+                nlohmann::json default_strategy = {
+                    {"name", "ORDER_BOOK_IMBALANCE"}, 
+                    {"symbol", first_symbol},
+                    {"active", true},
+                    {"params", {
+                        {"lookback_levels", 10},
+                        {"imbalance_threshold", 1.5}
+                    }}
+                };
+                
+                // Create the strategies array and add default strategy
+                config_["strategies"] = nlohmann::json::array();
+                config_["strategies"].push_back(default_strategy);
+            }
+        }
 
-        data_handler_ = ws_handler;
 
+        for (const auto& strategy_config : config_["strategies"]) {
+            try {
+                if (strategy_config.value("active", false)) {
+                    strategies_.push_back(create_strategy_from_config(strategy_config, event_queue_, data_handler_));
+                    analytics_->logDeployment(true);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to deploy strategy: " << e.what() << std::endl;
+                analytics_->logDeployment(false);
+            }
+        }
+
+        portfolio_ = std::make_shared<Portfolio>(
+            event_queue_, 
+            config_.value("initial_capital", 100000.0), 
+            data_handler_
+        );
+        
+        execution_handler_ = std::make_shared<SimulatedExecutionHandler>(event_queue_, data_handler_);
+        risk_manager_ = std::make_shared<RiskManager>(event_queue_, portfolio_, config_["risk"].value("risk_per_trade_pct", 0.01));
+        
+        // ... (The rest of the constructor remains the same) ...
+        if (config_.contains("strategy_classifier")) {
+            strategy_classifier_ = std::make_unique<MLStrategyClassifier>(
+                config_["strategy_classifier"].value("model_path", "")
+            );
+        }
+
+        if (config_.contains("performance_forecaster")) {
+            performance_forecaster_ = std::make_unique<PerformanceForecaster>(
+                config_["performance_forecaster"].value("model_path", "")
+            );
+        }
+
+        if (config_.contains("market_regime")) {
+            auto regime_config = config_["market_regime"];
+            market_regime_detector_ = std::make_shared<MarketRegimeDetector>(
+                event_queue_,
+                data_handler_,
+                regime_config.value("symbol", "BTC/USDT"),
+                regime_config.value("volatility_lookback", 20),
+                regime_config.value("trend_lookback", 50),
+                regime_config.value("high_vol_threshold", 0.02),
+                regime_config.value("low_vol_threshold", 0.005),
+                regime_config.value("trend_threshold_pct", 0.5)
+            );
+        }
+
+        monitor_interval_ms_ = config_.value("monitor_interval_ms", 5000);
+        last_monitor_time_ = std::chrono::steady_clock::now();
+        risk_check_interval_ms_ = config_.value("risk_check_interval_ms", 10000); // Default 10s
+        last_risk_check_time_ = std::chrono::steady_clock::now();
+        resource_check_interval_ms_ = config_.value("resource_check_interval_ms", 5000); // Default 5s
+        last_resource_check_time_ = std::chrono::steady_clock::now();
+
+        // --- MODIFICATION START: Initialize strategies from config ---
+        if (config_.contains("strategies") && config_["strategies"].is_array()) {
+            for (const auto& strategy_config : config_["strategies"]) {
+                std::string strategy_name = strategy_config.value("name", "DEFAULT");
+                std::cout << "Initializing strategy: " << strategy_name << std::endl;
+                
+                // Use StrategyFactory instead of direct Strategy instantiation
+                auto strategy = StrategyFactory::createStrategy(
+                    strategy_config,
+                    event_queue_,
+                    data_handler_
+                );
+                
+                strategies_.push_back(strategy);
+            }
+        } else if (config_.contains("strategy")) {
+            // Handle legacy single strategy config
+            std::string strategy_name = config_["strategy"].value("name", "DEFAULT");
+            std::cout << "Initializing strategy: " << strategy_name << std::endl;
+            
+            // Use StrategyFactory instead of direct Strategy instantiation
+            auto strategy = StrategyFactory::createStrategy(
+                config_["strategy"],
+                event_queue_,
+                data_handler_
+            );
+            
+            strategies_.push_back(strategy);
+        }
+        // --- MODIFICATION END ---
     } else { // Default to historical data handling for BACKTEST, OPTIMIZATION, etc.
         std::cout << "Initializing HFTDataHandler for historical session." << std::endl;
         

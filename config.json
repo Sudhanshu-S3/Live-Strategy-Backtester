@@ -1,20 +1,32 @@
 {
-  "run_mode": "SHADOW",
-  "initial_capital": 100000.0,
+  "run_mode": "BACKTEST",
   "symbols": ["BTCUSDT", "ETHUSDT"],
-  "data_handler": {
-    "live_host": "stream.binance.com",
-    "live_port": "9443",
-    "live_target": "/ws"
+  "initial_capital": 100000.0,
+  "data": {
+    "start_date": "2025-07-13",
+    "end_date": "2025-07-14",
+    "trade_data_dir": "data",
+    "book_data_dir": "data",
+    "historical_data_fallback_dir": "historical_data"
   },
   "strategies": [
     {
       "name": "ORDER_BOOK_IMBALANCE",
       "symbol": "BTCUSDT",
+      "active": true,
       "params": {
         "lookback_levels": 10,
         "imbalance_threshold": 1.5
       }
     }
-  ]
+  ],
+  "websocket": {
+    "host": "stream.binance.com",
+    "port": 9443,
+    "target": "/ws"
+  },
+  "risk": {
+    "risk_per_trade_pct": 0.01,
+    "max_drawdown_pct": 0.05
+  }
 }
