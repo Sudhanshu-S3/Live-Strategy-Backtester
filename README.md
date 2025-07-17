@@ -104,11 +104,6 @@ We welcome contributions to the Live Strategy Backtester project. Please see our
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## Author
 
-- Thanks to all contributors who have helped shape this project
-- Special thanks to the open-source libraries we depend on: cpr, dlib, mio, and zstd
-
-```
-
-```
+Sudhanshu Shukla
