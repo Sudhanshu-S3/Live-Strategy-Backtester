@@ -113,6 +113,7 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         
         // Use the "data_handler" section from config as recommended
         const auto& dh_config = config_["data_handler"]; 
+<<<<<<< HEAD
         std::string host = dh_config.contains("live_host") ? dh_config["live_host"].get<std::string>() : "";
         
         // Fix port handling
@@ -126,6 +127,11 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         }
 
         std::string target = dh_config.contains("live_target") ? dh_config["live_target"].get<std::string>() : "";
+=======
+        std::string host = dh_config.value("live_host", "");
+        std::string port = dh_config.value("live_port", "");
+        std::string target = dh_config.value("live_target", "");
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
 
         if (host.empty() || port.empty() || target.empty()) {
             throw std::runtime_error("Config error: 'live_host', 'live_port', and 'live_target' must be set in 'data_handler' for live mode.");
@@ -139,7 +145,11 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
             port,
             target
         );
+<<<<<<< HEAD
         ws_handler->connect(); // Start the connection
+=======
+        ws_handler->connect(); // IMPORTANT: Start the connection
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
         data_handler_ = ws_handler;
 
     } else { // Default to historical data handling for BACKTEST, OPTIMIZATION, etc.
@@ -160,6 +170,7 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     
     analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
+<<<<<<< HEAD
     // Ensure strategies array exists
     if (!config_.contains("strategies") || !config_["strategies"].is_array()) {
         std::cout << "No strategies found in config, creating a default strategy for live trading" << std::endl;
@@ -185,6 +196,8 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
         }
     }
 
+=======
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
     for (const auto& strategy_config : config_["strategies"]) {
         try {
             if (strategy_config.value("active", false)) {

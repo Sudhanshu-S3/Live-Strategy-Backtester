@@ -1,9 +1,15 @@
+<<<<<<< HEAD
+=======
+// --- Paste this entire block into src/data/WebSocketDataHandler.cpp ---
+
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
 #include "../../include/data/WebSocketDataHandler.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <chrono>
 #include <iomanip>
 
+<<<<<<< HEAD
 // Disable stringop-overflow warning for the entire file (Boost Asio issue)
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
@@ -11,6 +17,8 @@
 #pragma warning(disable: 4996)
 #endif
 
+=======
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
 // Helper function to report errors
 void fail(beast::error_code ec, char const* what) {
     std::cerr << what << ": " << ec.message() << "\n";
@@ -55,6 +63,7 @@ void WebSocketDataHandler::connect() {
     std::cout << "Connecting to WebSocket at " << host_ << ":" << port_ << target_ << std::endl;
     finished_ = false;
 
+<<<<<<< HEAD
     // Disable the specific warning before resolver code
     #if defined(__GNUC__) || defined(__clang__)
     #pragma GCC diagnostic push
@@ -64,6 +73,8 @@ void WebSocketDataHandler::connect() {
     #pragma warning(disable: 4996)
     #endif
 
+=======
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
     // Look up the domain name
     resolver_.async_resolve(
         host_,
@@ -72,6 +83,7 @@ void WebSocketDataHandler::connect() {
             &WebSocketDataHandler::on_resolve,
             shared_from_this()));
 
+<<<<<<< HEAD
     // Re-enable warnings
     #if defined(__GNUC__) || defined(__clang__)
     #pragma GCC diagnostic pop
@@ -79,6 +91,8 @@ void WebSocketDataHandler::connect() {
     #pragma warning(pop)
     #endif
 
+=======
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
     // Start the I/O context in its own thread
     ioc_thread_ = std::thread([this](){ 
         try {
@@ -93,6 +107,7 @@ void WebSocketDataHandler::connect() {
 void WebSocketDataHandler::stop() {
     std::cout << "Stopping WebSocket connection..." << std::endl;
     
+<<<<<<< HEAD
     try {
         // Cancel any outstanding operations
         beast::error_code ec;
@@ -108,6 +123,18 @@ void WebSocketDataHandler::stop() {
     }
     catch (const std::exception& e) {
         std::cerr << "Error during WebSocket shutdown: " << e.what() << std::endl;
+=======
+    // Cancel any outstanding operations
+    beast::error_code ec;
+    ws_.close(websocket::close_code::normal, ec);
+    
+    // Stop the I/O context
+    ioc_.stop();
+    
+    // Wait for the thread to complete
+    if (ioc_thread_.joinable()) {
+        ioc_thread_.join();
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
     }
     
     finished_ = true;
@@ -116,8 +143,11 @@ void WebSocketDataHandler::stop() {
 
 void WebSocketDataHandler::on_resolve(beast::error_code ec, tcp::resolver::results_type results) {
     if (ec) {
+<<<<<<< HEAD
         std::cerr << "Failed to resolve host '" << host_ << "': " << ec.message() << std::endl;
         std::cerr << "Please check your internet connection and verify the hostname is correct." << std::endl;
+=======
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
         fail(ec, "resolve");
         return;
     }
@@ -223,6 +253,7 @@ void WebSocketDataHandler::on_read(beast::error_code ec, std::size_t bytes_trans
         fail(ec, "read");
         return;
     }
+<<<<<<< HEAD
     
     try {
         // Get message as string
@@ -252,6 +283,22 @@ void WebSocketDataHandler::on_read(beast::error_code ec, std::size_t bytes_trans
                 &WebSocketDataHandler::on_read,
                 shared_from_this()));
     }
+=======
+
+    // Process the message
+    std::string message = beast::buffers_to_string(buffer_.data());
+    process_message(message);
+    
+    // Clear the buffer
+    buffer_.consume(bytes_transferred);
+
+    // Queue up another read
+    ws_.async_read(
+        buffer_,
+        beast::bind_front_handler(
+            &WebSocketDataHandler::on_read,
+            shared_from_this()));
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
 }
 
 void WebSocketDataHandler::on_close(beast::error_code ec) {
@@ -265,6 +312,7 @@ void WebSocketDataHandler::on_close(beast::error_code ec) {
 
 void WebSocketDataHandler::process_message(const std::string& message) {
     try {
+<<<<<<< HEAD
         // Parse JSON message
         nlohmann::json j = nlohmann::json::parse(message);
         
@@ -432,6 +480,106 @@ void WebSocketDataHandler::process_message(const std::string& message) {
         std::cerr << "JSON parse error: " << e.what() << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Error processing message: " << e.what() << std::endl;
+=======
+        auto json_msg = nlohmann::json::parse(message);
+
+        if (json_msg.contains("e") && json_msg["e"] == "trade") {
+            // ... existing trade processing logic ...
+            std::string symbol = json_msg["s"];
+            long long timestamp = json_msg["T"];
+            double price = std::stod(json_msg["p"].get<std::string>());
+            double quantity = std::stod(json_msg["q"].get<std::string>());
+            std::string side = json_msg["m"] ? "SELL" : "BUY";
+
+            auto trade = std::make_shared<TradeEvent>(symbol, timestamp, price, quantity, side);
+            // Fix: Just push trade directly - it's already a shared_ptr<Event> after casting
+            event_queue_->push(std::make_shared<std::shared_ptr<Event>>(trade));
+
+
+            // Update the latest bar
+            Bar& bar = latest_bars_map_.at(symbol);
+            // Fix: bar.timestamp is a string but you're comparing with int 0
+            if (bar.timestamp.empty()) { // First trade for this symbol
+                bar.timestamp = std::to_string(timestamp);
+                bar.symbol = symbol;
+                bar.open = bar.high = bar.low = bar.close = price;
+                bar.volume = quantity;
+            } else {
+                // Update existing bar
+                bar.high = std::max(bar.high, price);
+                bar.low = std::min(bar.low, price);
+                bar.close = price;
+                bar.volume += quantity;
+            }
+            
+            // Notify any listeners
+            if (on_new_data_) {
+                on_new_data_();
+            }
+        } else if (json_msg.contains("e") && json_msg["e"] == "depthUpdate") {
+            // Process order book updates
+            std::string symbol = json_msg["s"];
+            long long timestamp = json_msg["E"];
+            
+            // Create order book event
+            auto orderbook = std::make_shared<OrderBookEvent>(symbol, timestamp);
+            
+            // Also update our stored order book
+            OrderBook& stored_book = latest_orderbooks_[symbol];
+            stored_book.timestamp = timestamp;
+            stored_book.symbol = symbol;
+            
+            // Add bid levels
+            if (json_msg.contains("b") && json_msg["b"].is_array()) {
+                stored_book.bids.clear(); // Clear old levels before update
+                for (const auto& bid : json_msg["b"]) {
+                    if (bid.is_array() && bid.size() >= 2) {
+                        double price = std::stod(bid[0].get<std::string>());
+                        double quantity = std::stod(bid[1].get<std::string>());
+                        orderbook->addBidLevel(price, quantity);
+                        // Option 1: If you only want to update quantity but keep other pair data
+                        stored_book.bids[price].second = quantity;
+                        // Option 2: If you want to replace the entire pair
+                        //stored_book.bids[price] = std::make_pair(price, quantity);
+                    }
+                }
+            }
+            
+            // Add ask levels
+            if (json_msg.contains("a") && json_msg["a"].is_array()) {
+                stored_book.asks.clear(); // Clear old levels before update
+                for (const auto& ask : json_msg["a"]) {
+                    if (ask.is_array() && ask.size() >= 2) {
+                        double price = std::stod(ask[0].get<std::string>());
+                        double quantity = std::stod(ask[1].get<std::string>());
+                        orderbook->addAskLevel(price, quantity);
+                        // Option 1: If you only want to update quantity but keep other pair data
+                        stored_book.asks[price].second = quantity;
+                        // Option 2: If you want to replace the entire pair
+                        //stored_book.asks[price] = std::make_pair(price, quantity);
+                    }
+                }
+            }
+            
+            // Print order book update summary
+            std::cout << "ORDER BOOK: " << symbol << " | " 
+                      << "Bids: " << orderbook->getBidLevels().size() << " | "
+                      << "Asks: " << orderbook->getAskLevels().size() << std::endl;
+            
+            // Push order book event
+            event_queue_->push(std::make_shared<std::shared_ptr<Event>>(orderbook));
+
+            
+            // Notify any listeners
+            if (on_new_data_) {
+                on_new_data_();
+            }
+        }
+    } catch (const nlohmann::json::parse_error& e) {
+        std::cerr << "JSON parse error in WebSocketDataHandler: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in WebSocketDataHandler: " << e.what() << std::endl;
+>>>>>>> ef82a6ae559d39c2be7a0dee4c6355537669c2a5
     }
 }
 
