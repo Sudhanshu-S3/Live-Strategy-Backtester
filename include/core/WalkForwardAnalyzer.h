@@ -1,7 +1,7 @@
 #ifndef WALK_FORWARD_ANALYZER_H
 #define WALK_FORWARD_ANALYZER_H
 
-#include "../lib/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 

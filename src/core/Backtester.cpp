@@ -1,17 +1,22 @@
 #include "../../include/core/Backtester.h"
+#include <iostream>
+#include <fstream>
+#include <stdexcept>
+#include <iomanip> // For std::setprecision
+
+// --- MODIFICATION START: Include all necessary data handlers ---
 #include "../../include/data/HFTDataHandler.h"
+#include "../../include/data/WebSocketDataHandler.h"
+#include "../../include/data/HistoricCSVDataHandler.h" // Assuming this also exists for other modes
+// --- MODIFICATION END ---
+
 #include "../../include/strategy/OrderBookImbalanceStrategy.h"
 #include "../../include/strategy/MLStrategyClassifier.h"
 #include "../../include/analytics/PerformanceForecaster.h"
 #include "strategy/PairsTradingStrategy.h"
-#include <iostream>
-#include <fstream>
-#include <stdexcept>
-#include <iomanip> // <-- FIX: Include for std::setprecision
+#include "../../include/execution/SimulatedExecutionHandler.h"
 
-// FIX: Include the missing header for SimulatedExecutionHandler
-#include "../../include/execution/SimulatedExecutionHandler.h" 
-
+// ... (the create_strategy_from_config function remains unchanged) ...
 std::shared_ptr<Strategy> create_strategy_from_config(
     const nlohmann::json& config,
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
@@ -46,6 +51,7 @@ std::shared_ptr<Strategy> create_strategy_from_config(
     throw std::runtime_error("Unknown strategy name in config: " + name);
 }
 
+
 Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     std::string mode_str = config.value("run_mode", "BACKTEST");
     if (mode_str == "OPTIMIZATION") run_mode_ = RunMode::OPTIMIZATION;
@@ -54,16 +60,49 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     else run_mode_ = RunMode::BACKTEST;
 
     event_queue_ = std::make_shared<ThreadSafeQueue<std::shared_ptr<Event>>>();
-    
-    auto data_config = config_["data"];
-    data_handler_ = std::make_shared<HFTDataHandler>(
-        event_queue_, config_["symbols"].get<std::vector<std::string>>(),
-        data_config.value("trade_data_dir", ""),
-        data_config.value("book_data_dir", ""),
-        data_config.value("historical_data_fallback_dir", ""),
-        data_config.value("start_date", ""),
-        data_config.value("end_date", "")
-    );
+    auto symbols = config_["symbols"].get<std::vector<std::string>>();
+
+    // --- MODIFICATION START: Conditional Data Handler Creation ---
+    // This block replaces the original hardcoded HFTDataHandler creation.
+    if (run_mode_ == RunMode::SHADOW) { // Or add other live modes like `run_mode_ == RunMode::LIVE`
+        std::cout << "Initializing WebSocketDataHandler for live session." << std::endl;
+        
+        // Use the "data_handler" section from config as recommended
+        const auto& dh_config = config_["data_handler"]; 
+        std::string host = dh_config.value("live_host", "");
+        std::string port = dh_config.value("live_port", "");
+        std::string target = dh_config.value("live_target", "");
+
+        if (host.empty() || port.empty() || target.empty()) {
+            throw std::runtime_error("Config error: 'live_host', 'live_port', and 'live_target' must be set in 'data_handler' for live mode.");
+        }
+
+        // Create and connect the WebSocketDataHandler
+        auto ws_handler = std::make_shared<WebSocketDataHandler>(
+            event_queue_,
+            symbols,
+            host,
+            port,
+            target
+        );
+        ws_handler->connect(); // IMPORTANT: Start the connection
+        data_handler_ = ws_handler;
+
+    } else { // Default to historical data handling for BACKTEST, OPTIMIZATION, etc.
+        std::cout << "Initializing HFTDataHandler for historical session." << std::endl;
+        
+        // Your original logic for historical data
+        auto data_config = config_["data"]; 
+        data_handler_ = std::make_shared<HFTDataHandler>(
+            event_queue_, symbols,
+            data_config.value("trade_data_dir", ""),
+            data_config.value("book_data_dir", ""),
+            data_config.value("historical_data_fallback_dir", ""),
+            data_config.value("start_date", ""),
+            data_config.value("end_date", "")
+        );
+    }
+    // --- MODIFICATION END ---
     
     analytics_ = std::make_shared<Analytics>(config_["analytics"]);
 
@@ -87,7 +126,8 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     
     execution_handler_ = std::make_shared<SimulatedExecutionHandler>(event_queue_, data_handler_);
     risk_manager_ = std::make_shared<RiskManager>(event_queue_, portfolio_, config_["risk"].value("risk_per_trade_pct", 0.01));
-
+    
+    // ... (The rest of the constructor remains the same) ...
     if (config_.contains("strategy_classifier")) {
         strategy_classifier_ = std::make_unique<MLStrategyClassifier>(
             config_["strategy_classifier"].value("model_path", "")
@@ -102,7 +142,6 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
 
     if (config_.contains("market_regime")) {
         auto regime_config = config_["market_regime"];
-        // FIX: Correctly call the constructor with event_queue_ first
         market_regime_detector_ = std::make_shared<MarketRegimeDetector>(
             event_queue_,
             data_handler_,
@@ -123,6 +162,8 @@ Backtester::Backtester(const nlohmann::json& config) : config_(config) {
     last_resource_check_time_ = std::chrono::steady_clock::now();
 }
 
+// ... (The rest of the Backtester.cpp file remains unchanged) ...
+// The run(), run_backtest(), handleEvent(), and other methods are the same.
 Backtester::~Backtester() {
     continue_backtest_ = false;
 }
@@ -149,18 +190,18 @@ void Backtester::run_backtest() {
     auto start_time = std::chrono::high_resolution_clock::now();
     long long event_count = 0;
 
+    // This old connection logic is no longer needed here, it's handled in the constructor.
+    /*
     if (run_mode_ == RunMode::SHADOW) {
-        // This cast is problematic if we want to support multiple live handlers.
-        // Consider a more generic connect method in the DataHandler interface.
-        // std::dynamic_pointer_cast<HFTDataHandler>(data_handler_)->connectLiveFeed();
+        std::dynamic_pointer_cast<HFTDataHandler>(data_handler_)->connectLiveFeed();
     }
+    */
     
     while (continue_backtest_ && (!data_handler_->isFinished() || run_mode_ == RunMode::SHADOW)) {
         data_handler_->updateBars();
         
         analytics_->detect_anomalies(data_handler_);
         
-        // FIX: Correctly use try_pop which returns an optional
         while (auto opt_event = event_queue_->try_pop()) {
             std::shared_ptr<Event> event = *opt_event.value();
             handleEvent(event);
@@ -221,7 +262,6 @@ void Backtester::run_backtest() {
 void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
     portfolio_->updateTimeIndex();
     
-    // Pass market data events to all strategies
     if (event->type == EventType::MARKET) {
         for (auto& strategy : strategies_) {
             strategy->onMarket(static_cast<MarketEvent&>(*event));
@@ -244,13 +284,7 @@ void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
         if (strategy_classifier_) {
             auto recommended_strategies = strategy_classifier_->classify(regime_event.new_state);
             for (auto& strategy : strategies_) {
-                bool recommended = false;
-                for (const auto& recommended_name : recommended_strategies) {
-                    if (strategy->getName() == recommended_name) {
-                        recommended = true;
-                        break;
-                    }
-                }
+                bool recommended = std::find(recommended_strategies.begin(), recommended_strategies.end(), strategy->getName()) != recommended_strategies.end();
                 if (recommended) {
                     strategy->resume();
                 } else {
@@ -264,11 +298,9 @@ void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
         case EventType::SIGNAL:
             risk_manager_->onSignal(static_cast<SignalEvent&>(*event));
             break;
-        // FIX: Use EventType::ORDER instead of Event::ORDER
         case EventType::ORDER:
             execution_handler_->onOrder(static_cast<OrderEvent&>(*event));
             break;
-        // FIX: Use EventType::FILL instead of Event::FILL
         case EventType::FILL:
             portfolio_->onFill(static_cast<FillEvent&>(*event));
             break;
@@ -276,7 +308,6 @@ void Backtester::handleEvent(const std::shared_ptr<Event>& event) {
             risk_manager_->onDataSourceStatus(static_cast<DataSourceStatusEvent&>(*event));
             break;
         default:
-            // Market, Trade, OrderBook events are handled above and fall through here
             break;
     }
 }
@@ -299,7 +330,6 @@ void Backtester::log_live_performance() {
             printf("  (No open positions)\n");
         } else {
             for (const auto& [symbol, pos] : positions) {
-                // FIX: Use OrderSide::BUY instead of OrderDirection::LONG
                 printf("  - %s: Quantity=%.4f, AvgCost=%.2f, Dir=%s\n",
                        symbol.c_str(), pos.quantity, pos.average_cost, 
                        (static_cast<int>(pos.direction) == static_cast<int>(OrderSide::BUY) ? "BUY" : "SELL"));
@@ -314,13 +344,13 @@ nlohmann::json Backtester::run_optimization() {
     
     if (!config_.contains("optimization")) {
         std::cerr << "Optimization requires an 'optimization' section in config.json" << std::endl;
-        return nlohmann::json(); // Return an empty json object on error
+        return nlohmann::json();
     }
     auto opt_config = config_["optimization"];
     std::string strategy_to_optimize = opt_config.value("strategy_to_optimize", "");
     if (strategy_to_optimize.empty()) {
         std::cerr << "Optimization config must specify 'strategy_to_optimize'" << std::endl;
-        return nlohmann::json(); // Return an empty json object on error
+        return nlohmann::json();
     }
 
     nlohmann::json base_strategy_config;
@@ -334,14 +364,11 @@ nlohmann::json Backtester::run_optimization() {
     }
     if (strategy_idx == -1) {
         std::cerr << "Could not find strategy '" << strategy_to_optimize << "' in config." << std::endl;
-        return nlohmann::json(); // Return an empty json object on error
+        return nlohmann::json();
     }
 
     std::vector<nlohmann::json> parameter_sets;
-    // This is a simplified grid search. A real implementation might be recursive
-    // to handle any number of parameters.
     auto param_ranges = opt_config["param_ranges"];
-    // FIX: Use .get<double>() to extract numbers from JSON for calculations
     for (double p1 = param_ranges["p1_start"].get<double>(); p1 <= param_ranges["p1_end"].get<double>(); p1 += param_ranges["p1_step"].get<double>()) {
         for (double p2 = param_ranges["p2_start"].get<double>(); p2 <= param_ranges["p2_end"].get<double>(); p2 += param_ranges["p2_step"].get<double>()) {
             nlohmann::json params;
@@ -391,7 +418,6 @@ void Backtester::run_walk_forward() {
     int out_of_sample_days = wf_config.value("out_of_sample_days", 30);
     std::string start_date_str = wf_config.value("start_date", "2023-01-01");
 
-    // Simple date calculation logic (for production, use a proper date library)
     auto string_to_time = [](const std::string& s) {
         std::tm tm = {};
         std::stringstream ss(s);
@@ -411,18 +437,15 @@ void Backtester::run_walk_forward() {
     for (int i = 0; i < num_splits; ++i) {
         std::cout << "\n--- WFA Split " << i + 1 << "/" << num_splits << " ---\n";
 
-        // In-sample period
         auto in_sample_start = current_start_date;
         auto in_sample_end = in_sample_start + std::chrono::hours(24 * in_sample_days);
         
-        // Out-of-sample period
         auto out_of_sample_start = in_sample_end;
         auto out_of_sample_end = out_of_sample_start + std::chrono::hours(24 * out_of_sample_days);
 
         std::cout << "  In-Sample: " << time_to_string(in_sample_start) << " to " << time_to_string(in_sample_end) << std::endl;
         std::cout << "  Out-of-Sample: " << time_to_string(out_of_sample_start) << " to " << time_to_string(out_of_sample_end) << std::endl;
         
-        // --- Run in-sample optimization ---
         nlohmann::json in_sample_config = config_;
         in_sample_config["run_mode"] = "OPTIMIZATION";
         in_sample_config["data"]["start_date"] = time_to_string(in_sample_start);
@@ -437,13 +460,11 @@ void Backtester::run_walk_forward() {
             continue;
         }
 
-        // --- Run out-of-sample backtest with best params ---
         nlohmann::json out_of_sample_config = config_;
         out_of_sample_config["run_mode"] = "BACKTEST";
         out_of_sample_config["data"]["start_date"] = time_to_string(out_of_sample_start);
         out_of_sample_config["data"]["end_date"] = time_to_string(out_of_sample_end);
         
-        // Find strategy to optimize and set its params
         std::string strategy_to_optimize = config_["optimization"].value("strategy_to_optimize", "");
         for (size_t j = 0; j < out_of_sample_config["strategies"].size(); ++j) {
             if (out_of_sample_config["strategies"][j]["name"] == strategy_to_optimize) {
@@ -458,11 +479,9 @@ void Backtester::run_walk_forward() {
         double total_return = out_of_sample_backtester.getPortfolio()->getRealTimePerformance().getTotalReturn();
         out_of_sample_returns.push_back(total_return);
         
-        // Move to the next period
         current_start_date = out_of_sample_start;
     }
 
-    // --- Aggregate and Report Results ---
     std::cout << "\n--- Walk-Forward Analysis Results ---\n";
     double total_return_sum = 0;
     for(size_t i = 0; i < out_of_sample_returns.size(); ++i) {

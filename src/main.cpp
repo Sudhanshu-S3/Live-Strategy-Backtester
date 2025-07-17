@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "../lib/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include "../include/core/Backtester.h"
 #include "../include/core/Portfolio.h"

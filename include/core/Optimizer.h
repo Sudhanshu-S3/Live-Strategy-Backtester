@@ -1,7 +1,7 @@
 #ifndef OPTIMIZER_H
 #define OPTIMIZER_H
 
-#include "../lib/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 #include <map>

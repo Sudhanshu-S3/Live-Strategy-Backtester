@@ -1,83 +1,24 @@
 {
   "run_mode": "BACKTEST",
-  "initial_capital": 100000.0,
+  "initial_cash": 100000.0,
   "symbols": ["BTCUSDT"],
-  "data": {
-    "websocket_uri": "wss://stream.binance.com:9443/ws/btcusdt@trade",
-    "trade_data_dir": "historical_data/trades",
-    "book_data_dir": "historical_data/orderbooks",
-    "historical_data_fallback_dir": "historical_data/full"
+  "data_handler": {
+    "type": "CSV",
+    "csv_dir": "./data/",
+    "live_host": "stream.binance.com",
+    "live_port": "9443",
+    "live_target": "/ws/btcusdt@trade"
   },
   "strategies": [
     {
-      "name": "ORDER_BOOK_IMBALANCE",
-      "symbol": "BTCUSDT",
-      "active": true,
-      "params": {
-        "lookback_levels": 15,
-        "imbalance_threshold": 1.7
-      }
-    },
-    {
-      "name": "MARKET_REGIME_DETECTOR",
-      "symbol": "BTCUSDT",
-      "active": true,
-      "params": {
-        "volatility_lookback": 20,
-        "trend_lookback": 50,
-        "high_vol_threshold": 0.02,
-        "low_vol_threshold": 0.005,
-        "trend_threshold_pct": 0.5
-      }
-    },
-    {
-      "name": "SIMPLE_MOVING_AVERAGE_CROSSOVER",
-      "symbol": "BTCUSDT",
-      "active": false,
+      "name": "SimpleMovingAverageCrossover",
       "params": {
         "short_window": 10,
         "long_window": 30
       }
     }
   ],
-  "optimization": {
-    "enabled": false,
-    "strategy_to_optimize": "ORDER_BOOK_IMBALANCE",
-    "metric_to_optimize": "Sharpe Ratio",
-    "param_ranges": {
-      "lookback_levels": [10, 15, 20],
-      "imbalance_threshold": [1.5, 1.7, 2.0]
-    }
-  },
-  "walk_forward": {
-    "enabled": false,
-    "strategy_to_test": "ORDER_BOOK_IMBALANCE",
-    "data_start_date": "2023-01-01",
-    "data_end_date": "2023-08-31",
-    "in_sample_months": 2,
-    "out_of_sample_months": 1
-  },
-  "monte_carlo": {
-    "enabled": false,
-    "strategy_to_test": "ORDER_BOOK_IMBALANCE",
-    "num_simulations": 100,
-    "base_params": {
-      "lookback_levels": 15,
-      "imbalance_threshold": 1.7
-    },
-    "randomization_ranges": {
-      "lookback_levels": [10, 20],
-      "imbalance_threshold": [1.5, 2.0]
-    }
-  },
   "analytics": {
-    "enable_cross_correlation": true,
-    "anomaly_detection_z_score": 3.0
-  },
-  "stress_test": {
-    "enabled": false,
-    "scenario_name": "High Volatility Crash",
-    "volatility_multiplier": 3.0,
-    "price_shock_pct": -0.15
+    "risk_free_rate": 0.02
   }
 }

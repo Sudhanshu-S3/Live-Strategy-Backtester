@@ -5,7 +5,7 @@
 #include "DataTypes.h"
 #include "event/Event.h"
 #include "../../include/event/EventQueue.h" // Add this line to include EventQueue definition
-#include "../../../lib/mio/mio.hpp"
+#include "mio/mio.hpp"
 #include "../event/ThreadSafeQueue.h"
 #include <optional> // For std::optional
 #include <string>

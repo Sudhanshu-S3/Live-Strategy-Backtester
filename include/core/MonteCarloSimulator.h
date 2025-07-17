@@ -1,7 +1,7 @@
 #ifndef MONTE_CARLO_SIMULATOR_H
 #define MONTE_CARLO_SIMULATOR_H
 
-#include "../lib/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #include <vector>
 
 using json = nlohmann::json;
