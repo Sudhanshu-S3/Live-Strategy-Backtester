@@ -109,6 +109,25 @@ void Performance::runMonteCarloSimulation(int num_simulations) const {
     std::cout << "95th Percentile Return: " << p95 * 100.0 << "%" << std::endl;
 }
 
+double Performance::calculateVaR(double confidence_level) const {
+    if (returns_.empty()) {
+        return 0.0;
+    }
+    
+    // Sort the returns for percentile calculation
+    std::vector<double> sorted_returns = returns_;
+    std::sort(sorted_returns.begin(), sorted_returns.end());
+    
+    // Calculate the index at the given confidence level
+    int index = static_cast<int>(sorted_returns.size() * (1.0 - confidence_level));
+    
+    // Ensure index is within bounds
+    index = std::max(0, std::min(index, static_cast<int>(sorted_returns.size()) - 1));
+    
+    // Return the value at the calculated index (negative for loss)
+    return -sorted_returns[index];
+}
+
 
 // --- Helper and Accessor Methods ---
 double Performance::calculateMean(const std::vector<double>& data) const {

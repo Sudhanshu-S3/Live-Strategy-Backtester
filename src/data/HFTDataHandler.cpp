@@ -223,3 +223,7 @@ std::optional<OrderBook> HFTDataHandler::getLatestOrderBook(const std::string& s
     }
     return std::nullopt;
 }
+
+const std::vector<std::string>& HFTDataHandler::getSymbols() const {
+    return symbols_;
+}

@@ -7,46 +7,38 @@
 #include <vector>
 #include <cmath>
 #include <stdexcept>
+#include <map>
+#include <numeric> // Add this for std::accumulate and std::inner_product
 
 class PairsTradingStrategy : public Strategy {
 public:
     PairsTradingStrategy(
         std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
         std::shared_ptr<DataHandler> data_handler,
-        const std::vector<std::string>& symbols,
-        int lookback,
-        double entry_threshold_z,
-        double exit_threshold_z
-    ) : Strategy(event_queue, data_handler, "PAIRS_TRADING_" + symbols[0] + "_" + symbols[1], symbols[0] + "_" + symbols[1]),
-        lookback_(lookback),
-        entry_threshold_z_(entry_threshold_z),
-        exit_threshold_z_(exit_threshold_z) {
-        if (symbols.size() != 2) {
-            throw std::invalid_argument("PairsTradingStrategy requires exactly two symbols.");
-        }
-        symbol1_ = symbols[0];
-        symbol2_ = symbols[1];
-    }
+        const std::string& name,
+        const std::string& symbol_a,
+        const std::string& symbol_b,
+        int window,
+        double z_score_threshold
+    );
 
-    // Implement pure virtual functions from base class
     void onMarket(const MarketEvent& event) override;
     void onTrade(const TradeEvent& event) override;
     void onOrderBook(const OrderBookEvent& event) override;
     void onFill(const FillEvent& event) override;
 
 private:
-    void calculate_spread();
-
-    std::string symbol1_, symbol2_;
-    int lookback_;
-    double entry_threshold_z_;
-    double exit_threshold_z_;
-
-    std::deque<double> prices1_, prices2_;
-    std::deque<double> spread_history_;
+    enum class PositionState { FLAT, LONG_PAIR, SHORT_PAIR };
     
-    bool in_long_spread_ = false;
-    bool in_short_spread_ = false;
+    void generate_signal(const std::string& signal_symbol, OrderDirection direction);
+    
+    std::string symbol_a_;
+    std::string symbol_b_;
+    int window_;
+    double z_score_threshold_;
+    std::map<std::string, double> latest_prices_;
+    std::deque<double> ratio_history_;
+    PositionState current_position_;
 };
 
 #endif // PAIRS_TRADING_STRATEGY_H

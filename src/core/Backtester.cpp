@@ -31,12 +31,20 @@ std::shared_ptr<Strategy> create_strategy_from_config(
         );
     } else if (name == "PAIRS_TRADING") {
         auto params = config["params"];
-        return std::make_shared<PairsTradingStrategy>(
-            event_queue, data_handler, config["symbols"].get<std::vector<std::string>>(),
-            params.value("lookback", 50), 
-            params.value("entry_z", 2.0),
-            params.value("exit_z", 0.5)
-        );
+        auto symbols = config["symbols"].get<std::vector<std::string>>();
+        if (symbols.size() >= 3) {  // Make sure we have enough symbols
+            return std::make_shared<PairsTradingStrategy>(
+                event_queue, 
+                data_handler, 
+                symbols[0],  // First symbol
+                symbols[1],  // Second symbol
+                symbols[2],  // Third symbol (possibly for benchmark)
+                params.value("lookback", 50),
+                params.value("entry_z", 2.0)
+            );
+        } else {
+            throw std::runtime_error("PairsTradingStrategy requires at least 3 symbols");
+        }
     } else if (name == "MARKET_REGIME_DETECTOR") {
         auto params = config["params"];
         return std::make_shared<MarketRegimeDetector>(

@@ -34,6 +34,7 @@ private:
     std::vector<double> equity_curve_;
     double initial_capital_;
     std::vector<Trade> trade_log_;
+    std::vector<double> returns_;  // Vector to store return values
 
     // Trade-level stats
     int total_trades_ = 0;

@@ -228,3 +228,36 @@ void Portfolio::generateTradeLevelReport() const {
     }
     std::cout << "Total Trades: " << trade_log_.size() << std::endl;
 }
+
+double Portfolio::get_max_drawdown() const {
+    if (equity_curve_.empty()) {
+        return 0.0;
+    }
+    
+    double max_drawdown = 0.0;
+    double peak = std::get<1>(equity_curve_[0]);
+    
+    for (const auto& point : equity_curve_) {
+        double equity = std::get<1>(point);
+        if (equity > peak) {
+            peak = equity;
+        } else {
+            double drawdown = (peak - equity) / peak;
+            max_drawdown = std::max(max_drawdown, drawdown);
+        }
+    }
+    
+    return max_drawdown;
+}
+
+std::vector<Bar> Portfolio::get_latest_bars(const std::string& symbol, int n) const {
+    // Delegate to data_handler if available
+    if (data_handler_) {
+        return data_handler_->getLatestBars(symbol, n);
+    }
+    return {};
+}
+
+double Portfolio::get_cash() const {
+    return current_cash_;
+}

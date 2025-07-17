@@ -1,9 +1,8 @@
-#include "../../include/strategy/PairTradingStrategy.h"
-#include <numeric>
-#include <cmath>
+#include "../../include/strategy/PairsTradingStrategy.h"
 #include <iostream>
+#include <numeric> // For std::accumulate and std::inner_product
 
-PairTradingStrategy::PairTradingStrategy(
+PairsTradingStrategy::PairsTradingStrategy(
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<Event>>> event_queue,
     std::shared_ptr<DataHandler> data_handler,
     const std::string& name,
@@ -22,7 +21,7 @@ PairTradingStrategy::PairTradingStrategy(
     latest_prices_[symbol_b_] = 0.0;
 }
 
-void PairTradingStrategy::onMarket(const MarketEvent& event) {
+void PairsTradingStrategy::onMarket(const MarketEvent& event) {
     if (event.symbol != symbol_a_ && event.symbol != symbol_b_) {
         return;
     }
@@ -80,20 +79,19 @@ void PairTradingStrategy::onMarket(const MarketEvent& event) {
     }
 }
 
-void PairTradingStrategy::onTrade(const TradeEvent& event) {}
-void PairTradingStrategy::onOrderBook(const OrderBookEvent& event) {}
-void PairTradingStrategy::onFill(const FillEvent& event) {}
-void PairTradingStrategy::onMarketRegimeChanged(const MarketRegimeChangedEvent& event) {
-    market_state_ = event.new_state;
-    // Potentially adjust z-score threshold based on volatility
-    if (market_state_.volatility == VolatilityLevel::HIGH) {
-        z_score_threshold_ = 1.5 * base_z_score_threshold_;
-    } else {
-        z_score_threshold_ = base_z_score_threshold_;
-    }
+void PairsTradingStrategy::onTrade(const TradeEvent& event) {
+    // Implement trade event handling logic
 }
 
-void PairTradingStrategy::generate_signal(const std::string& signal_symbol, OrderDirection direction) {
+void PairsTradingStrategy::onOrderBook(const OrderBookEvent& event) {
+    // Implement order book event handling logic
+}
+
+void PairsTradingStrategy::onFill(const FillEvent& event) {
+    // Implement fill event handling logic
+}
+
+void PairsTradingStrategy::generate_signal(const std::string& signal_symbol, OrderDirection direction) {
     long long timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     auto signal = std::make_shared<SignalEvent>(name, signal_symbol, timestamp, direction, 0.0, 1.0);
     event_queue_->push(std::make_shared<std::shared_ptr<Event>>(signal));
