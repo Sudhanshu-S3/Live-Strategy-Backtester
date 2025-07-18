@@ -6,7 +6,7 @@ A high-performance C++ backtesting framework for developing, testing, and optimi
 
 Live Strategy Backtester is a comprehensive framework designed for quantitative analysts, algorithmic traders, and financial researchers to develop and test trading strategies using historical and real-time market data. The system supports multi-asset analysis, risk management, and machine learning integration for advanced strategy development.
 
-![Screenshot of the backtester's user interface.](https://drive.google.com/file/d/1u4FSEfYvdb9rKtGPS3FN6J8r_ZfasAMq/view?usp=sharing)
+![Screenshot of the backtester's user interface.](./backtester.png)
 
 ## Features
 
