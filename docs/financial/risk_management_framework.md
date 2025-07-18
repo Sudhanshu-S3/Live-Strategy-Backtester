@@ -55,11 +55,13 @@ Market risk refers to the potential for loss due to market movements affecting s
 
 **Implementation**:
 
-````cpp
+```cpp
 // Example of volatility-based position sizing
 double getVolatilityAdjustedSize(const std::string& instrument, double baseSize) {
     // Calculate historical volatility
     auto prices = dataProvider.getHistoricalPrices(instrument,// filepath: c:\Users\91829\Desktop\Project\Live_Strategy_Backtester\doc\financial\risk_management_framework.md
+
+```
 # Risk Management Framework
 
 ## Overview
@@ -116,4 +118,4 @@ Market risk refers to the potential for loss due to market movements affecting s
 // Example of volatility-based position sizing
 double getVolatilityAdjustedSize(const std::string& instrument, double baseSize) {
     // Calculate historical
-````
+```
