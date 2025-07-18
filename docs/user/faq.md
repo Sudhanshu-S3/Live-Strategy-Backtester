@@ -1,6 +1,3 @@
-## 2. FAQ Documentation
-
-````markdown
 # Frequently Asked Questions
 
 ## General Questions
