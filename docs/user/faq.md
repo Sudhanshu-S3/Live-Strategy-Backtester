@@ -65,8 +65,3 @@ optimizer.addParameter("lookbackPeriod", 10, 100, 5);
 optimizer.addParameter("threshold", 0.5, 3.0, 0.1);
 optimizer.optimize(myStrategy, dataSource);
 ```
-````
-
-```
-
-```
