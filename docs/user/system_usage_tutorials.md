@@ -1,240 +1,350 @@
-ystem Usage & Strategy Development
-This document provides tutorials for using the backtesting system and guidance on strategy development.
+# System Usage & Strategy Development Guide
 
-1. System Usage Tutorials
-Basic Tutorials
-Tutorial 1: Running Your First Backtest
-This tutorial will walk you through setting up and running a simple backtest.
+## Quick Start
 
-Step 1: Set up the environment
-Start by including the necessary headers and initializing the backtester.
+### Your First Backtest
 
+Here's how to run a simple backtest in 5 steps:
+
+```cpp
 #include "core/Backtester.h"
 #include "data/CSVDataSource.h"
 #include "strategy/BasicStrategy.h"
 
 int main() {
-    // Initialize backtester
+    // 1. Create backtester
     Backtester tester;
-
-    // Configure logging
-    tester.setLogLevel(LogLevel::INFO);
-
-Step 2: Load market data
-Create a data source and load your historical data files.
-
-    // Create data source
+    
+    // 2. Load data
     auto dataSource = std::make_shared<CSVDataSource>();
-
-    // Add data files
     dataSource->addFile("BTCUSDT", "data/BTCUSDT-1s-2025-07-13.csv");
-    dataSource->addFile("ETHUSDT", "data/ETHUSDT-1s-2025-07-13.csv");
-
-    // Set data source to backtester
     tester.setDataSource(dataSource);
-
-Step 3: Create and configure your strategy
-Instantiate your strategy and set its parameters.
-
-    // Create strategy
+    
+    // 3. Create strategy
     auto strategy = std::make_shared<BasicStrategy>();
-
-    // Configure strategy parameters
     strategy->setParameter("lookbackPeriod", 20);
-    strategy->setParameter("entryThreshold", 2.0);
-    strategy->setParameter("exitThreshold", 1.0);
-
-    // Add strategy to backtester
     tester.setStrategy(strategy);
-
-Step 4: Configure backtesting parameters
-(This section would detail setting parameters like start/end dates, trading fees, initial capital, etc.)
-
-Step 5: Run backtest and analyze results
-Execute the backtest and process the output.
-
-    // Run the backtest
+    
+    // 4. Run backtest
     tester.run();
-
-    // Analyze results
+    
+    // 5. View results
     tester.printResults();
-
+    
     return 0;
 }
-
-Tutorial 2: Multi-Asset Strategy
-This tutorial demonstrates how to implement and test a strategy across multiple assets.
-
-Step 1: Create a multi-asset strategy.
-
-(Further steps would be included here)
-
-Intermediate Tutorials
-Tutorial 3: Event-Driven Strategy
-Learn how to build strategies that react to market events like news or economic data releases.
-
-Creating an event handler.
-
-(Further steps would be included here)
-
-Tutorial 4: Parameter Optimization
-Learn how to use built-in tools to optimize strategy parameters and find the best-performing configurations.
-
-Advanced Tutorials
-Tutorial 5: Custom Risk Management
-Implement advanced risk management rules beyond simple stop-loss/take-profit, such as portfolio-level risk controls.
-
-Tutorial 6: Custom Performance Metrics
-Create and use your own performance metrics to evaluate strategies based on specific criteria.
-
-Exercises
-Each tutorial includes practical exercises to reinforce concepts:
-
-Modify the basic strategy to include a stop-loss mechanism.
-
-Create a pairs trading strategy using two correlated assets.
-
-Implement a volatility-based position sizing algorithm.
-
-Build a strategy that combines technical indicators with market sentiment data.
-
-Create a custom visualization for strategy performance.
-
-2. Strategy Development Guide
-Key Components of a Strategy
-Each strategy consists of:
-
-Initialization Logic: Setup parameters, indicators, and initial state.
-
-Market Data Handlers: Process incoming ticks and bars for each instrument.
-
-Signal Generation: Create trade signals based on your logic.
-
-Position Management: Manage entries, exits, and position sizing.
-
-Risk Management: Apply risk controls like stop-losses or exposure limits.
-
-Strategy Development Workflow
-Define Strategy Concept:
-
-Identify a market inefficiency or pattern.
-
-Formulate a testable hypothesis.
-
-Define clear entry and exit criteria.
-
-Implement Strategy:
-
-Code the strategy class inheriting from the base strategy.
-
-Configure parameters.
-
-Set up indicators and signal logic.
-
-Backtest:
-
-Run historical simulations across various market conditions.
-
-Analyze performance metrics.
-
-Identify weaknesses and potential failure points.
-
-Optimize:
-
-Refine strategy parameters using optimization tools.
-
-Improve risk management rules.
-
-Address edge cases discovered during backtesting.
-
-Validation:
-
-Perform out-of-sample testing on data the strategy has not seen.
-
-Conduct walk-forward analysis to simulate live trading.
-
-Run robustness checks (e.g., Monte Carlo simulations).
-
-Example Strategy: Moving Average Crossover
-Here is a conceptual implementation for a simple moving average crossover strategy:
-
-Logic: Generate a BUY signal when a short-term moving average crosses above a long-term moving average. Generate a SELL signal on the reverse crossover.
-
-Parameters: Short-term period, long-term period.
-
-Implementation: The strategy would calculate two moving averages from the market data and check their values on each new bar.
-
-Common Strategy Patterns
-Trend Following:
-
-Moving average crossovers
-
-Breakout systems
-
-Channel strategies (e.g., Donchian Channels)
-
-Mean Reversion:
-
-Oscillator-based strategies (RSI, Stochastics)
-
-Statistical arbitrage / Pairs trading
-
-Overbought/oversold indicators
-
-Event-Driven:
-
-News-based trading
-
-Earnings announcements
-
-Economic data releases
-
-Advanced Techniques
-Multi-Timeframe Analysis: Incorporate signals from different timeframes (e.g., use a weekly trend to filter daily signals).
-
-Machine Learning Integration: Use the ML integration module to build predictive models for signal generation or regime filtering.
-
-Best Practices
-Keep it simple: Start with a simple, robust idea before adding complexity.
-
-Robust testing: Test your strategy across different market conditions (bull, bear, sideways).
-
-Avoid overfitting: Be rigorous with out-of-sample and forward-testing validation.
-
-Risk management: Always include proper risk controls. This is critical.
-
-Documentation: Clearly document strategy logic, parameters, and performance expectations.
-
-3. Performance Measurement
-Benchmark Comparison
-Strategies can be compared against standard benchmarks to evaluate relative performance:
-
-Market indices (S&P 500, NASDAQ, etc.)
-
-Standard asset class benchmarks
-
-Custom user-defined benchmarks
-
-Reporting
-Performance reports can be generated in multiple formats:
-
-Interactive HTML: For dynamic charts and data exploration.
-
-PDF: For static, shareable reports.
-
-JSON: For exporting data for further analysis in other tools.
-
-4. Troubleshooting & FAQ
-Frequently Asked Questions
-Is the backtester suitable for high-frequency strategies?
-Yes, the backtester is optimized for high-performance and can process tick-level data efficiently.
-
-How much historical data can the system handle?
-The system is designed to handle years of tick-level data for multiple instruments, limited only by available system memory (RAM) and storage.
-
-Can I perform walk-forward testing?
-Yes, use the WalkForwardAnalyzer module to conduct walk-forward optimization and testing, which provides a more realistic simulation of live trading.
-
-Common Issues
-My backtest is running slowly. How can I improve performance?
-See the Performance Optimization Guide for tips on writing efficient strategy code, optimizing data access, and configuring the backtester for speed.
+```
+
+## Strategy Development
+
+### Basic Strategy Structure
+
+Every strategy needs these 4 parts:
+
+```cpp
+class MyStrategy : public Strategy {
+public:
+    void initialize() override {
+        // Setup indicators and parameters
+    }
+    
+    void onBar(const BarData& bar) override {
+        // Process new price data
+        // Generate signals
+        // Execute trades
+    }
+    
+    void onTick(const TickData& tick) override {
+        // Optional: handle tick data
+    }
+    
+    void onOrderUpdate(const OrderUpdate& update) override {
+        // Optional: handle order fills
+    }
+};
+```
+
+### Simple Moving Average Strategy
+
+```cpp
+class SimpleMAStrategy : public Strategy {
+private:
+    int shortPeriod = 10;
+    int longPeriod = 30;
+    std::vector<double> prices;
+    
+public:
+    void initialize() override {
+        prices.clear();
+    }
+    
+    void onBar(const BarData& bar) override {
+        prices.push_back(bar.close);
+        
+        // Keep only what we need
+        if (prices.size() > longPeriod) {
+            prices.erase(prices.begin());
+        }
+        
+        // Need enough data
+        if (prices.size() < longPeriod) return;
+        
+        // Calculate moving averages
+        double shortMA = average(prices, shortPeriod);
+        double longMA = average(prices, longPeriod);
+        
+        // Generate signals
+        if (shortMA > longMA && getCurrentPosition() <= 0) {
+            // Buy signal
+            enterLong(1.0);
+        }
+        else if (shortMA < longMA && getCurrentPosition() >= 0) {
+            // Sell signal
+            enterShort(1.0);
+        }
+    }
+    
+private:
+    double average(const std::vector<double>& data, int period) {
+        double sum = 0;
+        for (int i = data.size() - period; i < data.size(); i++) {
+            sum += data[i];
+        }
+        return sum / period;
+    }
+};
+```
+
+## Development Process
+
+### 1. Plan Your Strategy
+- What pattern are you trying to catch?
+- When do you buy/sell?
+- How much risk do you take?
+
+### 2. Code It Simple
+- Start with basic logic
+- Test one thing at a time
+- Keep it readable
+
+### 3. Test It
+- Run backtests on historical data
+- Check different time periods
+- Look for problems
+
+### 4. Improve It
+- Add risk management
+- Optimize parameters
+- Fix issues you found
+
+## Common Strategy Types
+
+### Trend Following
+```cpp
+// Buy when price breaks above resistance
+if (currentPrice > highestPrice(20)) {
+    enterLong(1.0);
+}
+```
+
+### Mean Reversion
+```cpp
+// Buy when price is too low
+if (currentPrice < movingAverage(20) * 0.95) {
+    enterLong(1.0);
+}
+```
+
+### Breakout
+```cpp
+// Buy when volume confirms breakout
+if (currentPrice > resistance && currentVolume > averageVolume(10)) {
+    enterLong(1.0);
+}
+```
+
+## Multi-Asset Strategy
+
+```cpp
+class MultiAssetStrategy : public Strategy {
+private:
+    std::map<std::string, double> lastPrices;
+    
+public:
+    void onBar(const BarData& bar) override {
+        // Track prices for each symbol
+        lastPrices[bar.symbol] = bar.close;
+        
+        // Simple pairs trading example
+        if (bar.symbol == "BTCUSDT") {
+            double btcPrice = bar.close;
+            double ethPrice = lastPrices["ETHUSDT"];
+            
+            // Trade based on price ratio
+            double ratio = btcPrice / ethPrice;
+            if (ratio > 15.0) {
+                // BTC too expensive vs ETH
+                enterShort("BTCUSDT", 0.5);
+                enterLong("ETHUSDT", 0.5);
+            }
+        }
+    }
+};
+```
+
+## Risk Management
+
+### Position Sizing
+```cpp
+double calculatePositionSize(double accountValue, double riskPercent) {
+    return accountValue * (riskPercent / 100.0);
+}
+
+// Use 2% risk per trade
+double size = calculatePositionSize(getAccountValue(), 2.0);
+enterLong(size);
+```
+
+### Stop Loss
+```cpp
+void onBar(const BarData& bar) override {
+    // Check for stop loss
+    if (getCurrentPosition() > 0 && bar.close < entryPrice * 0.98) {
+        // Lost 2%, exit
+        closePosition();
+    }
+}
+```
+
+## Performance Analysis
+
+### Key Metrics
+- **Total Return**: How much profit/loss
+- **Win Rate**: Percentage of winning trades
+- **Max Drawdown**: Worst losing streak
+- **Sharpe Ratio**: Risk-adjusted returns
+
+### View Results
+```cpp
+// After backtest
+auto results = tester.getResults();
+std::cout << "Total Return: " << results.totalReturn << std::endl;
+std::cout << "Win Rate: " << results.winRate << "%" << std::endl;
+std::cout << "Max Drawdown: " << results.maxDrawdown << std::endl;
+```
+
+## Best Practices
+
+### Keep It Simple
+- Start with basic strategies
+- Add complexity slowly
+- Test each change
+
+### Test Thoroughly
+- Use different time periods
+- Test bull and bear markets
+- Check edge cases
+
+### Manage Risk
+- Never risk more than you can lose
+- Use stop losses
+- Diversify across assets
+
+### Document Everything
+- Comment your code
+- Record your assumptions
+- Note what works and what doesn't
+
+## Common Problems
+
+### Slow Backtests
+- Use fewer indicators
+- Process less data
+- Optimize your code
+
+### Unrealistic Results
+- Include trading fees
+- Account for slippage
+- Use realistic position sizes
+
+### Overfitting
+- Test on different data
+- Keep strategies simple
+- Validate out-of-sample
+
+## Getting Help
+
+### Quick Checks
+1. Are your data files correct?
+2. Are your parameters reasonable?
+3. Is your logic working as expected?
+
+### Support
+- Check the documentation
+- Look at example strategies
+- Contact support if needed
+
+## Example: Complete RSI Strategy
+
+```cpp
+class RSIStrategy : public Strategy {
+private:
+    std::vector<double> prices;
+    int period = 14;
+    
+public:
+    void onBar(const BarData& bar) override {
+        prices.push_back(bar.close);
+        
+        if (prices.size() > period + 1) {
+            prices.erase(prices.begin());
+        }
+        
+        if (prices.size() < period + 1) return;
+        
+        double rsi = calculateRSI();
+        
+        // Oversold - buy
+        if (rsi < 30 && getCurrentPosition() <= 0) {
+            enterLong(calculatePositionSize());
+        }
+        // Overbought - sell
+        else if (rsi > 70 && getCurrentPosition() >= 0) {
+            enterShort(calculatePositionSize());
+        }
+    }
+    
+private:
+    double calculateRSI() {
+        double gains = 0, losses = 0;
+        
+        for (int i = 1; i < prices.size(); i++) {
+            double change = prices[i] - prices[i-1];
+            if (change > 0) gains += change;
+            else losses += -change;
+        }
+        
+        if (losses == 0) return 100;
+        
+        double avgGain = gains / period;
+        double avgLoss = losses / period;
+        double rs = avgGain / avgLoss;
+        
+        return 100 - (100 / (1 + rs));
+    }
+    
+    double calculatePositionSize() {
+        return getAccountValue() * 0.05; // 5% of account
+    }
+};
+```
+
+## Next Steps
+
+1. **Start Simple**: Try the moving average example
+2. **Experiment**: Modify parameters and logic
+3. **Test**: Run backtests on different data
+4. **Learn**: Study what works and what doesn't
+5. **Improve**: Add risk management and optimization
+
+Remember: The best strategy is one that's simple, robust, and well-tested!
